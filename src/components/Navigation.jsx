@@ -1,5 +1,8 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+// Assuming AuthContext is correctly located relative to this component.
+// If the error persists, please confirm the exact path of AuthContext.js
+import { useAuth } from "../context/AuthContext"; 
 import {
   LayoutDashboard,
   Users,
@@ -14,24 +17,11 @@ import {
   Archive,
   Clock,
   HelpCircle,
-  UserCog,
+  ClipboardList // Used for Staff Logs icon
 } from "lucide-react";
 
-// MOCK: Replacing the missing "../context/AuthContext" for compilation.
-// You must replace this function with your actual useAuth hook when running locally.
-const useAuth = () => {
-  // Mock User data for demonstration (set role to "admin" to see all links)
-  const user = { username: "Admin User", role: "admin" }; 
-  const logout = () => {
-    console.log("Mock Logout called. Navigating to /login.");
-    // In a real app, this would clear authentication state.
-  };
-  return { user, logout };
-};
-
 const Navigation = ({ children }) => {
-  // Use the mock hook here for successful compilation
-  const { user, logout } = useAuth(); 
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -40,39 +30,40 @@ const Navigation = ({ children }) => {
     navigate("/login");
   };
 
-  // Core menu items (for staff + admin)
-  const menuItems = [
-    { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { path: "/operations", label: "Operations", icon: UserCog },
-    { path: "/customers", label: "Customers", icon: Users },
-    { path: "/invoices", label: "Invoices", icon: FileText },
-    { path: "/products", label: "Products", icon: Package },
-    { path: "/inventory", label: "Inventory", icon: Archive },
-    { path: "/history", label: "History", icon: Clock },
-    { path: "/support", label: "Support", icon: HelpCircle },
-    // Adding extra items 
-  //   { path: "/extra1", label: "Extra Link 1", icon: Users },
-  //   { path: "/extra2", label: "Extra Link 2", icon: FileText },
-  //   { path: "/extra3", label: "Extra Link 3", icon: Package },
-  //   { path: "/extra4", label: "Extra Link 4", icon: Archive },
-  //   { path: "/extra5", label: "Extra Link 5", icon: Clock },
-   ];
+  const isActiveLink = (path) => location.pathname === path;
 
-  // Admin-only items
-  const adminItems = [
-    { path: "/reports", label: "Reports", icon: BarChart3 },
-    { path: "/settings", label: "Settings", icon: Settings },
+  // --- Dynamic Menu Generation ---
+  const fullMenuItems = [
+    { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ['admin', 'staff'] },
+    { path: "/customers", label: "Customers", icon: Users, roles: ['admin', 'staff'] },
+    { path: "/invoices", label: "Invoices", icon: FileText, roles: ['admin', 'staff'] },
+    { path: "/products", label: "Products", icon: Package, roles: ['admin', 'staff'] },
+    { path: "/inventory", label: "Inventory", icon: Archive, roles: ['admin', 'staff'] },
+    { path: "/history", label: "History", icon: Clock, roles: ['admin', 'staff'] },
+    
+    // Role-specific items
+    { path: "/reports", label: "Reports", icon: BarChart3, roles: ['admin'] },
+    { path: "/stafflogs", label: "Staff Logs", icon: ClipboardList, roles: ['staff'] }, // Only for Staff
+    
+    // Core utility/Admin Items
+    { path: "/support", label: "Support", icon: HelpCircle, roles: ['admin', 'staff'] },
+    { path: "/settings", label: "Settings", icon: Settings, roles: ['admin'] },
   ];
 
-  // Fix: Ensure comparison uses the input path argument
-  const isActiveLink = (path) => location.pathname.toLowerCase() === path.toLowerCase(); 
+  // Filter menu items based on the current user's role
+  // If user object is null (not logged in), filteredMenuItems will be empty, hiding the sidebar.
+  const filteredMenuItems = user
+    ? fullMenuItems.filter(item => item.roles.includes(user.role))
+    : [];
+    
+  // --- End Dynamic Menu Generation ---
 
   return (
     <div className="d-flex">
-      {/* Sidebar */}
+      {/* Sidebar is only rendered if user is logged in */}
       {user && (
         <div
-          className="bg-dark text-white vh-100 d-flex flex-column position-fixed"
+          className="bg-dark text-white vh-100 position-fixed"
           style={{ width: "260px", zIndex: 1000 }}
         >
           {/* Sidebar Header */}
@@ -91,11 +82,10 @@ const Navigation = ({ children }) => {
             </div>
           </div>
 
-          {/* Navigation Menu (Scrollable area) */}
-          {/* Added navigation-scroll-area class */}
-          <nav className="p-3 flex-grow-1 overflow-auto navigation-scroll-area">
+          {/* Navigation Menu */}
+          <nav className="p-3">
             <div className="d-flex flex-column gap-1">
-              {menuItems.map((item) => {
+              {filteredMenuItems.map((item) => {
                 const IconComponent = item.icon;
                 const active = isActiveLink(item.path);
                 return (
@@ -119,43 +109,11 @@ const Navigation = ({ children }) => {
                   </Link>
                 );
               })}
-
-              {/* Admin only items */}
-              {user.role === "admin" &&
-                adminItems.map((item) => {
-                  const IconComponent = item.icon;
-                  const active = isActiveLink(item.path);
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      className={`d-flex align-items-center gap-3 text-decoration-none p-3 rounded-3 transition-all ${
-                        active
-                          ? "bg-primary text-white shadow-sm"
-                          : "text-white-emphasis hover-custom"
-                      }`}
-                    >
-                      <IconComponent
-                        size={20}
-                        className={
-                          active ? "text-white" : "text-white-emphasis"
-                        }
-                      />
-                      <span className="fw-medium">{item.label}</span>
-                      {active && (
-                        <ChevronRight
-                          size={16}
-                          className="ms-auto text-white"
-                        />
-                      )}
-                    </Link>
-                  );
-                })}
             </div>
           </nav>
 
           {/* Sidebar Footer */}
-          <div className="p-3 border-top border-secondary mt-auto">
+          <div className="position-absolute bottom-0 start-0 end-0 p-3 border-top border-secondary">
             <div className="d-flex align-items-center justify-content-between">
               <div className="d-flex align-items-center">
                 <div
@@ -193,7 +151,7 @@ const Navigation = ({ children }) => {
         <div className="p-4 bg-light min-vh-100">{children}</div>
       </div>
 
-      {/* Custom CSS for hover and scrollbar hiding */}
+      {/* Custom CSS for hover effects */}
       <style jsx>{`
         .hover-custom:hover {
           background-color: rgba(255, 255, 255, 0.1) !important;
@@ -202,27 +160,6 @@ const Navigation = ({ children }) => {
         }
         .transition-all {
           transition: all 0.2s ease-in-out;
-        }
-
-        /* ---------------------------------- */
-        /* CSS to Hide Scrollbar (Cross-Browser) */
-        /* ---------------------------------- */
-
-        /* Hide scrollbar for Chrome, Safari, and Opera */
-        .navigation-scroll-area::-webkit-scrollbar {
-          display: none;
-          width: 0 !important; /* Ensures space is also removed */
-          height: 0 !important;
-        }
-
-        /* Hide scrollbar for IE and Edge */
-        .navigation-scroll-area {
-          -ms-overflow-style: none; /* IE and Edge */
-        }
-
-        /* Hide scrollbar for Firefox */
-        .navigation-scroll-area {
-          scrollbar-width: none; /* Firefox */
         }
       `}</style>
     </div>
