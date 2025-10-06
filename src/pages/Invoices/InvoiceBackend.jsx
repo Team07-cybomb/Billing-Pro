@@ -13,15 +13,12 @@ export default function useInvoiceBackend() {
   // Global States (Data)
   const [invoices, setInvoices] = useState([]);
   const [customers, setCustomers] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState([]); // Products state holds current stock
   
   // Form States (Invoice Creation/Edit)
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [invoiceItems, setInvoiceItems] = useState([]);
   
-  // NOTE: TaxDetails state is kept for data structure compatibility 
-  // with existing APIs/DB, but its values are now unused/overwritten 
-  // by item-level tax logic in calculateTotals.
   const [taxDetails, setTaxDetails] = useState({ 
     cgst: 9, 
     sgst: 9, 
@@ -69,6 +66,7 @@ export default function useInvoiceBackend() {
 
   const fetchProducts = useCallback(async () => {
     try {
+      // NOTE: This should ideally fetch current inventory levels
       const res = await axios.get('http://localhost:5000/api/products', { headers: getAuthHeaders() });
       setProducts(res.data);
     } catch (err) {
@@ -78,9 +76,41 @@ export default function useInvoiceBackend() {
   }, [showAlert]);
 
   const createInvoice = async (invoicePayload) => {
+    
+    // =======================================================
+    // STOCK CHECK BEFORE INVOICING (Existing Logic)
+    // =======================================================
+    const itemsToCheck = invoicePayload.items;
+    const errors = [];
+    
+    itemsToCheck.forEach(item => {
+        const product = products.find(p => p._id === item.product);
+        const requiredQuantity = Number(item.quantity) || 0;
+        const currentStock = Number(product?.stock) || 0; // Assuming 'stock' field exists on product
+
+        if (!product) {
+            // Should not happen if product is selected, but good safety net
+            errors.push(`Product ID ${item.product} not found.`);
+        } else if (currentStock === 0) {
+            errors.push(`${product.name} is currently out of stock (0 available).`);
+        } else if (requiredQuantity > currentStock) {
+            errors.push(`${product.name} only has ${currentStock} units available. You requested ${requiredQuantity}.`);
+        }
+    });
+
+    if (errors.length > 0) {
+        // Halt invoice creation and display all stock errors
+        showAlert(errors.join(' | '), 'danger');
+        throw new Error('Stock check failed');
+    }
+    // =======================================================
+    
     try {
+      // NOTE: Your backend API must handle stock deduction after this successful check
       const res = await axios.post('http://localhost:5000/api/invoices', invoicePayload, { headers: getAuthHeaders() });
       await fetchInvoices();
+      // Refetch products to update local stock display immediately
+      await fetchProducts(); 
       showAlert('Invoice created successfully!', 'success');
       return res.data;
     } catch (err) {
@@ -95,6 +125,8 @@ export default function useInvoiceBackend() {
     try {
       await axios.put(`http://localhost:5000/api/invoices/${invoiceId}`, invoicePayload, { headers: getAuthHeaders() });
       await fetchInvoices();
+      // Refetch products on update as well, since updating an invoice might affect stock
+      await fetchProducts(); 
       showAlert('Invoice updated successfully!', 'success');
     } catch (err) {
       console.error('updateInvoice error', err);
@@ -106,8 +138,11 @@ export default function useInvoiceBackend() {
 
   const deleteInvoice = async (invoiceId) => {
     try {
+      // NOTE: Your backend API must handle stock replenishment upon deletion
       await axios.delete(`http://localhost:5000/api/invoices/${invoiceId}`, { headers: getAuthHeaders() });
       await fetchInvoices();
+      // Refetch products to update local stock display immediately
+      await fetchProducts(); 
       showAlert('Invoice deleted successfully!', 'success');
     } catch (err) {
       console.error('deleteInvoice error', err);
@@ -187,6 +222,14 @@ export default function useInvoiceBackend() {
           copy[index].hsnCode = found.hsnCode || '';
           // IMPORTANT: Use product's taxRate only, ignoring the global taxDetails state
           copy[index].taxRate = found.taxRate ?? 18; 
+          
+          // Add a warning if stock is low/zero on selection
+          const currentStock = Number(found.stock) || 0;
+          if (currentStock <= 0) {
+              showAlert(`${found.name} is currently out of stock.`, 'danger');
+          } else if (currentStock < 5) {
+              showAlert(`${found.name} is low in stock: ${currentStock} units remaining.`, 'warning');
+          }
         }
       }
 
@@ -243,19 +286,27 @@ export default function useInvoiceBackend() {
   const resetForm = () => {
     setSelectedCustomer(null);
     setInvoiceItems([]);
-    // Only reset taxDetails to default structure, not values, as they are unused for calculation
     setTaxDetails({ cgst: 9, sgst: 9, igst: 0, gstType: 'cgst_sgst' }); 
     setNotes('');
     setDueDate('');
     setPaymentType('cash');
   };
+  
+  // =======================================================
+  // NEW HELPER: Get stock for a product ID
+  // =======================================================
+  const getProductStock = useCallback((productId) => {
+      const product = products.find(p => p._id === productId);
+      return Number(product?.stock) || 0;
+  }, [products]);
+
 
   // --- Initial Load ---
 
   useEffect(() => {
     fetchInvoices();
     fetchCustomers();
-    fetchProducts();
+    fetchProducts(); // Load products to get stock data
   }, [fetchInvoices, fetchCustomers, fetchProducts]);
 
   return {
@@ -264,13 +315,13 @@ export default function useInvoiceBackend() {
     customers,
     products,
 
-    // Form State (kept taxDetails for compatibility but its values are ignored for calculation)
+    // Form State
     selectedCustomer,
     setSelectedCustomer,
     invoiceItems,
     setInvoiceItems,
-    taxDetails, // Included for edit/display compatibility, but UI ignores setter/updater
-    setTaxDetails, // Included for edit/display compatibility, but UI ignores setter/updater
+    taxDetails, 
+    setTaxDetails, 
     notes,
     setNotes,
     dueDate,
@@ -293,6 +344,7 @@ export default function useInvoiceBackend() {
     // Totals & Helpers
     calculateTotalsForItems,
     resetForm,
+    getProductStock, // EXPORTED HELPER
     
     // Alerts
     alert,

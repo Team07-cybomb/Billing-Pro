@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react'; // <--
 import { Card, Table, Row, Col, Button, Badge, Form, Modal, ProgressBar, InputGroup, Alert } from 'react-bootstrap';
 import { Plus, Search, Package, AlertTriangle, TrendingUp, Edit, Zap } from 'lucide-react';
 import axios from 'axios';
+import { Link } from 'react-router-dom';
 
 const Inventory = () => {
   const [products, setProducts] = useState([]);
@@ -139,11 +140,14 @@ const Inventory = () => {
           <p className="text-muted mb-0">Track and manage your product inventory</p>
         </Col>
         <Col xs="auto">
-          {/* NOTE: Linking to Products page for actual creation */}
+        <Link to="/products" className='text-decoration-none'>
+         {/* NOTE: Linking to Products page for actual creation */}
           <Button variant="success" className="d-flex align-items-center" onClick={() => showAlert('Redirecting to Products page to add item.', 'info')}>
             <Plus size={18} className="me-2" />
             Add New Product
           </Button>
+        </Link>
+         
         </Col>
       </Row>
 

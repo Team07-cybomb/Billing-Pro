@@ -8,7 +8,7 @@ const createObjectCsvStringifier = pkg.createObjectCsvStringifier;
 
 const router = express.Router();
 
-// Get all invoices with filtering, pagination, and DATE RANGE support
+// 1. Get all invoices with filtering, pagination, and DATE RANGE support (matches /api/invoices)
 router.get('/', auth, async (req, res) => {
   try {
     const { status, customer, page = 1, limit = 50, search, start, end } = req.query;
@@ -68,7 +68,7 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// Create invoice (INCLUDES STOCK DEDUCTION)
+// 2. Create invoice (matches POST /api/invoices)
 router.post('/', auth, async (req, res) => {
   try {
     console.log('Creating invoice with data:', req.body);
@@ -110,7 +110,7 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-// Create formatted invoice bill
+// 3. Create formatted invoice bill (matches POST /api/invoices/formatted-bill)
 router.post('/formatted-bill', auth, async (req, res) => {
   try {
     const { invoiceId, formattedData } = req.body;
@@ -132,83 +132,9 @@ router.post('/formatted-bill', auth, async (req, res) => {
   }
 });
 
-// Get single invoice
-router.get('/:id', auth, async (req, res) => {
-  try {
-    const invoice = await Invoice.findById(req.params.id)
-      .populate('customer')
-      .populate('createdBy')
-      .populate('items.product');
-    
-    if (!invoice) {
-      return res.status(404).json({ message: 'Invoice not found' });
-    }
-    
-    res.json(invoice);
-  } catch (error) {
-    console.error('Error fetching invoice:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Update invoice
-router.put('/:id', auth, async (req, res) => {
-  try {
-    const invoice = await Invoice.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    ).populate('customer items.product');
-    
-    if (!invoice) {
-      return res.status(404).json({ message: 'Invoice not found' });
-    }
-    
-    res.json(invoice);
-  } catch (error) {
-    console.error('Error updating invoice:', error);
-    res.status(400).json({ message: error.message });
-  }
-});
-
-// Delete invoice
-router.delete('/:id', auth, async (req, res) => {
-  try {
-    const invoice = await Invoice.findByIdAndDelete(req.params.id);
-    
-    if (!invoice) {
-      return res.status(404).json({ message: 'Invoice not found' });
-    }
-    
-    res.json({ message: 'Invoice deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting invoice:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Update invoice status
-router.patch('/:id/status', auth, async (req, res) => {
-  try {
-    const { status } = req.body;
-    const invoice = await Invoice.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    ).populate('customer items.product');
-    
-    if (!invoice) {
-      return res.status(404).json({ message: 'Invoice not found' });
-    }
-    
-    res.json(invoice);
-  } catch (error) {
-    console.error('Error updating invoice status:', error);
-    res.status(400).json({ message: error.message });
-  }
-});
-
-// Export invoices to CSV
+// =========================================================================
+// FIX APPLIED: MOVED THIS ROUTE BEFORE THE DYNAMIC ID ROUTES
+// 4. Export invoices to CSV (matches GET /api/invoices/export)
 router.get('/export', auth, async (req, res) => {
   try {
     const invoices = await Invoice.find()
@@ -255,6 +181,85 @@ router.get('/export', auth, async (req, res) => {
   } catch (error) {
     console.error('Error exporting invoices:', error);
     res.status(500).json({ message: error.message });
+  }
+});
+// =========================================================================
+
+// 5. Get single invoice (matches GET /api/invoices/:id)
+router.get('/:id', auth, async (req, res) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id)
+      .populate('customer')
+      .populate('createdBy')
+      .populate('items.product');
+    
+    if (!invoice) {
+      return res.status(404).json({ message: 'Invoice not found' });
+    }
+    
+    res.json(invoice);
+  } catch (error) {
+    console.error('Error fetching invoice:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// 6. Update invoice (matches PUT /api/invoices/:id)
+router.put('/:id', auth, async (req, res) => {
+  try {
+    const invoice = await Invoice.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    ).populate('customer items.product');
+    
+    if (!invoice) {
+      return res.status(404).json({ message: 'Invoice not found' });
+    }
+    
+    res.json(invoice);
+  } catch (error) {
+    console.error('Error updating invoice:', error);
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// 7. Delete invoice (matches DELETE /api/invoices/:id)
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    const invoice = await Invoice.findByIdAndDelete(req.params.id);
+    
+    if (!invoice) {
+      return res.status(404).json({ message: 'Invoice not found' });
+    }
+    
+    // NOTE: Stock replenishment logic should be implemented here on successful deletion
+    
+    res.json({ message: 'Invoice deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting invoice:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// 8. Update invoice status (matches PATCH /api/invoices/:id/status)
+router.patch('/:id/status', auth, async (req, res) => {
+  try {
+    const { status } = req.body;
+    const invoice = await Invoice.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    ).populate('customer items.product');
+    
+    if (!invoice) {
+      return res.status(404).json({ message: 'Invoice not found' });
+    }
+    
+    res.json(invoice);
+  } catch (error) {
+    console.error('Error updating invoice status:', error);
+    res.status(400).json({ message: error.message });
   }
 });
 

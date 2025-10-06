@@ -20,6 +20,7 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import RoleBasedRoute from "./components/RoleBasedRoutes";
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Operations from './pages/Operations';
+import StaffLog from './pages/StaffLog';
 function ProtectedRoute({ children }) {
   const { user } = useAuth();
   return user ? children : <Navigate to="/login" />;
@@ -46,6 +47,7 @@ function App() {
                 <Route path="/reports" element={<RoleBasedRoute allowedRoles={['admin']}><Reports /></RoleBasedRoute>} />
                 <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
                 <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
+                <Route path="/stafflogs" element={<ProtectedRoute><StaffLog /></ProtectedRoute>} />
                 <Route path="/settings" element={<RoleBasedRoute allowedRoles={['admin']}><Settings /></RoleBasedRoute>} />
                 <Route path="/PrivacyPolicy" element={<PrivacyPolicy />} />
                 <Route path="/Operations" element={<RoleBasedRoute allowedRoles={['staff','admin']}><Operations /></RoleBasedRoute>} />
