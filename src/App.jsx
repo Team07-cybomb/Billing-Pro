@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Container } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import '@fortawesome/fontawesome-free/css/all.min.css';
 
 // Components
 import Navigation from './components/Navigation';
@@ -15,9 +16,10 @@ import Reports from './pages/Reports';
 import History from './pages/History';
 import Support from './pages/Support';
 import Settings from './pages/Settings';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import RoleBasedRoute from "./components/RoleBasedRoutes";
 import { AuthProvider, useAuth } from './context/AuthContext';
-
+import Operations from './pages/Operations';
 function ProtectedRoute({ children }) {
   const { user } = useAuth();
   return user ? children : <Navigate to="/login" />;
@@ -45,7 +47,8 @@ function App() {
                 <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
                 <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
                 <Route path="/settings" element={<RoleBasedRoute allowedRoles={['admin']}><Settings /></RoleBasedRoute>} />
-
+                <Route path="/PrivacyPolicy" element={<PrivacyPolicy />} />
+                <Route path="/Operations" element={<RoleBasedRoute allowedRoles={['staff','admin']}><Operations /></RoleBasedRoute>} />
                 {/* Default redirect */}
                 <Route path="/" element={<Navigate to="/dashboard" />} />
                 
