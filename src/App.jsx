@@ -23,6 +23,8 @@ function ProtectedRoute({ children }) {
   return user ? children : <Navigate to="/login" />;
 }
 
+
+
 function App() {
   return (
     <AuthProvider>
@@ -46,12 +48,17 @@ function App() {
 
                 {/* Default redirect */}
                 <Route path="/" element={<Navigate to="/dashboard" />} />
+                
               </Routes>
             </Container>
+            
           </Navigation>
         </div>
+        
       </Router>
+      
     </AuthProvider>
+    
   );
 }
 

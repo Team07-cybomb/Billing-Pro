@@ -16,11 +16,29 @@ export const AuthProvider = ({ children }) => {
     const userData = localStorage.getItem('user');
     
     if (token && userData) {
-      setUser(JSON.parse(userData));
+      const parsedUser = JSON.parse(userData);
+      // Normalize user object to ensure it has _id
+      const normalizedUser = normalizeUser(parsedUser);
+      setUser(normalizedUser);
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     }
     setLoading(false);
   }, []);
+
+  // Helper function to normalize user object
+  const normalizeUser = (userData) => {
+    if (!userData) return null;
+    
+    // If user has id but no _id, copy id to _id
+    if (userData.id && !userData._id) {
+      return {
+        ...userData,
+        _id: userData.id
+      };
+    }
+    
+    return userData;
+  };
 
   const login = async (email, password) => {
     try {
@@ -31,10 +49,15 @@ export const AuthProvider = ({ children }) => {
 
       const { token, user } = response.data;
       
+      // Normalize user object before storing
+      const normalizedUser = normalizeUser(user);
+      
       localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('user', JSON.stringify(normalizedUser));
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(user);
+      setUser(normalizedUser);
+      
+      console.log('✅ Login successful - User:', normalizedUser);
       
       return { success: true };
     } catch (error) {
