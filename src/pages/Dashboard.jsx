@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Row, Col, Card, Button, Table, Badge, Spinner, Alert, ProgressBar } from 'react-bootstrap';
-import { TrendingUp, Users, Package, FileText, Plus, LogOut, Truck, DollarSign, Clock, UsersRound, ArrowUpRight, Eye, ShoppingCart, Activity, Zap, AlertTriangle, Calendar, Download } from 'lucide-react';
+import { TrendingUp, Users, Package, FileText, Plus, LogOut, Truck, DollarSign, Clock, UsersRound, ArrowUpRight, Eye, ShoppingCart, Activity, Zap, AlertTriangle, Calendar, Download, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -8,6 +8,8 @@ import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from 'chart.js';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
+
+const SETTINGS_API_BASE_URL = "http://localhost:5000/api/settings";
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -23,11 +25,34 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
+  
+  // --- CURRENCY STATE ---
+  const [currencySymbol, setCurrencySymbol] = useState('₹'); 
+  const [currencyCode, setCurrencyCode] = useState('INR'); 
+  // ----------------------
 
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const formatCurrency = (amount) => `₹${Number(amount).toFixed(2).toLocaleString('en-IN')}`;
+  const formatCurrency = useCallback((amount) => {
+    const numAmount = Number(amount) || 0;
+    
+    const formatted = new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numAmount);
+
+    const symbolMap = { 'INR': '₹', 'USD': '$', 'EUR': '€', 'GBP': '£', 'AUD': 'A$', 'CAD': 'C$' };
+    const displaySymbol = symbolMap[currencyCode] || currencySymbol;
+
+    if (formatted.includes(currencyCode)) {
+        return formatted.replace(currencyCode, displaySymbol).trim();
+    }
+    
+    return `${displaySymbol} ${numAmount.toFixed(2).toLocaleString()}`;
+  }, [currencyCode, currencySymbol]); // Depends on dynamic currency state
 
   const getAuthHeaders = () => localStorage.getItem('token') ? { Authorization: `Bearer ${localStorage.getItem('token')}` } : {};
 
@@ -59,9 +84,21 @@ const Dashboard = () => {
     }
   }, [sequentiallyOrderedInvoices]);
 
-  useEffect(() => {
-    fetchDashboardData();
+  // --- NEW: Fetch Settings for Currency ---
+  const fetchSettings = useCallback(async () => {
+    try {
+        const res = await axios.get(SETTINGS_API_BASE_URL, { headers: getAuthHeaders() });
+        const currencySetting = res.data.company?.currency || 'INR';
+        setCurrencyCode(currencySetting);
+        
+        const symbolMap = { 'INR': '₹', 'USD': '$', 'EUR': '€', 'GBP': '£', 'AUD': 'A$', 'CAD': 'C$' };
+        setCurrencySymbol(symbolMap[currencySetting] || currencySetting);
+    } catch (error) {
+        console.warn("Could not fetch currency settings for Dashboard, defaulting to INR.");
+    }
   }, []);
+  // ---------------------------------------
+
 
   const fetchDashboardData = async () => {
     setIsLoading(true);
@@ -69,6 +106,9 @@ const Dashboard = () => {
     const authHeaders = getAuthHeaders();
 
     try {
+      // Fetch settings concurrently with main data
+      await fetchSettings();
+      
       const [invoicesRes, productsRes, customersRes] = await Promise.all([
         axios.get('http://localhost:5000/api/invoices?limit=1000', { headers: authHeaders }),
         axios.get('http://localhost:5000/api/products?limit=1000', { headers: authHeaders }),
@@ -114,6 +154,10 @@ const Dashboard = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -272,7 +316,7 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="d-flex dashboard-container">
+    <div className="d-flex flex-column dashboard-container min-vh-100">
       <div className="flex-grow-1 p-4">
         {/* Enhanced Header */}
         <div className="dashboard-header mb-4">
@@ -511,7 +555,7 @@ const Dashboard = () => {
                       <tr>
                         <th className="ps-4">Invoice #</th>
                         <th>Customer</th>
-                        <th>Amount</th>
+                        <th>Amount ({currencySymbol})</th>
                         <th>Status</th>
                         <th className="pe-4">Date</th>
                       </tr>
@@ -614,7 +658,7 @@ const Dashboard = () => {
               </Card.Body>
             </Card>
 
-            {/* NEW: Quick Actions & Alerts Section */}
+            {/* Quick Actions & Alerts Section */}
             <Card className="shadow-sm border-0">
               <Card.Header className="bg-white border-0 py-2 d-flex justify-content-between align-items-center">
                 <h5 className="mb-0 fw-bold">Quick Actions & Alerts</h5>
@@ -681,17 +725,16 @@ const Dashboard = () => {
                       Manage Low Stock Items
                     </Button>
                   </Link>
-                  {/* {user?.role === "admin" && (
-                    <Button variant="outline-primary" className="w-100 d-flex align-items-center justify-content-center">
-                      <Download size={16} className="me-2" />
-                      Export Monthly Report
-                    </Button>
-                  )} */}
                 </div>
               </Card.Body>
             </Card>
           </Col>
         </Row>
+      </div>
+
+      {/* FOOTER BRANDING ADDED HERE */}
+      <div className="mt-4 pt-3 border-top text-center text-muted small">
+          Powered by **Cybomb Technologies**
       </div>
 
       <style jsx>{`

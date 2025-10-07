@@ -1,5 +1,4 @@
-// Products.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Table, 
   Button, 
@@ -14,7 +13,9 @@ import {
   Dropdown
 } from 'react-bootstrap';
 import axios from 'axios';
-import { Plus, Download, MoreVertical, Search, Edit, Trash2 } from 'lucide-react';
+import { Plus, Download, MoreVertical, Search, Edit, Trash2, RefreshCw } from 'lucide-react';
+
+const SETTINGS_API_BASE_URL = "http://localhost:5000/api/settings";
 
 const Products = () => {
   const [products, setProducts] = useState([]);
@@ -32,25 +33,65 @@ const Products = () => {
     sku: '',
     category: '',
     taxRate: '',
-    // ADDED Stock fields for completeness
     stock: '', 
     lowStockThreshold: 10
   });
+
+  // --- CURRENCY STATE ---
+  const [currencySymbol, setCurrencySymbol] = useState('$'); 
+  const [currencyCode, setCurrencyCode] = useState('USD'); 
 
   // Sample categories for dropdown
   const categories = [
     'All', 'Electronics', 'Clothing', 'Books', 'Home & Kitchen', 
     'Sports', 'Beauty', 'Toys', 'Automotive', 'Food & Beverages'
   ];
-
-  useEffect(() => {
-    fetchProducts();
-  }, []);
+  
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
 
   const showAlert = (message, type = 'success') => {
     setAlert({ show: true, message, type });
     setTimeout(() => setAlert({ show: false, message: '', type: '' }), 3000);
   };
+  
+  // Helper to format currency based on state
+  const formatCurrency = (amount) => {
+    const numAmount = Number(amount) || 0;
+    
+    const formatted = new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numAmount);
+
+    const symbolMap = { 'INR': '₹', 'USD': '$', 'EUR': '€', 'GBP': '£', 'AUD': 'A$', 'CAD': 'C$' };
+    const displaySymbol = symbolMap[currencyCode] || currencySymbol;
+
+    // Use string replacement for flexibility in symbol placement
+    if (formatted.includes(currencyCode)) {
+        return formatted.replace(currencyCode, displaySymbol).trim();
+    }
+    
+    return `${displaySymbol} ${numAmount.toFixed(2).toLocaleString()}`;
+  };
+  
+  const fetchSettings = useCallback(async () => {
+    try {
+        const res = await axios.get(SETTINGS_API_BASE_URL, { headers: getAuthHeaders() });
+        const currencySetting = res.data.company?.currency || 'USD';
+        setCurrencyCode(currencySetting);
+        
+        const symbolMap = { 'INR': '₹', 'USD': '$', 'EUR': '€', 'GBP': '£', 'AUD': 'A$', 'CAD': 'C$' };
+        setCurrencySymbol(symbolMap[currencySetting] || currencySetting);
+    } catch (error) {
+        console.warn("Could not fetch currency settings, defaulting to USD.");
+    }
+  }, []);
+
 
   const fetchProducts = async () => {
     try {
@@ -64,6 +105,17 @@ const Products = () => {
       showAlert('Error fetching products', 'danger');
     }
   };
+
+  const initialFetch = useCallback(async () => {
+      await Promise.all([
+          fetchSettings(),
+          fetchProducts()
+      ]);
+  }, [fetchSettings]);
+
+  useEffect(() => {
+    initialFetch();
+  }, [initialFetch]);
 
   
 // In Products.jsx - Enhanced handleSubmit
@@ -84,12 +136,12 @@ const handleSubmit = async (e) => {
 
     if (editingProduct) {
       await axios.put(`http://localhost:5000/api/products/${editingProduct._id}`, submitData, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: getAuthHeaders()
       });
       showAlert('Product updated successfully');
     } else {
       await axios.post('http://localhost:5000/api/products', submitData, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: getAuthHeaders()
       });
       showAlert('Product created successfully');
     }
@@ -125,9 +177,7 @@ const handleDelete = async () => {
     const token = localStorage.getItem("token");
 
     await axios.delete(`http://localhost:5000/api/products/${editingProduct._id}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: getAuthHeaders(),
     });
 
     showAlert('Product deleted successfully');
@@ -167,7 +217,7 @@ const handleDelete = async () => {
       const token = localStorage.getItem('token');
       const response = await axios.get('http://localhost:5000/api/products/export', {
         responseType: 'blob',
-        headers: { Authorization: `Bearer ${token}` }
+        headers: getAuthHeaders()
       });
       
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -226,6 +276,9 @@ const handleDelete = async () => {
           <p className="text-muted">Manage your product inventory and pricing</p>
         </Col>
         <Col xs="auto" className="d-flex gap-2">
+          <Button variant="outline-secondary" className="d-flex align-items-center" onClick={initialFetch}>
+            <RefreshCw size={18} className="me-2" /> Refresh
+          </Button>
           <Button variant="success" className="d-flex align-items-center" onClick={() => setShowModal(true)}>
             <Plus size={18} className="me-2" />
             Add Product
@@ -236,6 +289,12 @@ const handleDelete = async () => {
           </Button>
         </Col>
       </Row>
+
+      {/* Currency Alert */}
+      <Alert variant="info" className="mb-4 py-2 small">
+          Prices displayed in: <strong className='text-uppercase'>{currencyCode} ({currencySymbol})</strong>
+      </Alert>
+
 
       {/* Filters */}
       <Card className="mb-4 shadow-sm border-0">
@@ -317,9 +376,9 @@ const handleDelete = async () => {
                       {product.sku || 'N/A'}
                     </Badge>
                   </td>
-                  <td>${(product.price || 0).toFixed(2)}</td>
+                  <td>{formatCurrency(product.price)}</td>
                   <td>
-                    <strong>${calculateTotalWithTax(product.price, product.taxRate)}</strong>
+                    <strong>{formatCurrency(calculateTotalWithTax(product.price, product.taxRate))}</strong>
                   </td>
                   <td>
                     {product.category && (
@@ -415,7 +474,7 @@ const handleDelete = async () => {
             <Row>
               <Col md={3}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Price ($) *</Form.Label>
+                  <Form.Label>Price ({currencySymbol}) *</Form.Label>
                   <Form.Control
                     type="number"
                     step="0.01"
@@ -429,7 +488,7 @@ const handleDelete = async () => {
               </Col>
               <Col md={3}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Cost Price ($)</Form.Label>
+                  <Form.Label>Cost Price ({currencySymbol})</Form.Label>
                   <Form.Control
                     type="number"
                     step="0.01"
@@ -491,13 +550,13 @@ const handleDelete = async () => {
                     <Col>
                       <strong>Price Summary:</strong>
                     </Col>
-                    <Col>Base Price: ${formData.price}</Col>
+                    <Col>Base Price: {formatCurrency(formData.price)}</Col>
                     <Col>
-                      GST: ${calculateGST(formData.price, formData.taxRate)} 
+                      GST: {formatCurrency(calculateGST(formData.price, formData.taxRate))} 
                       ({formData.taxRate || 18}%)
                     </Col>
                     <Col>
-                      <strong>Total: ${calculateTotalWithTax(formData.price, formData.taxRate)}</strong>
+                      <strong>Total: {formatCurrency(calculateTotalWithTax(formData.price, formData.taxRate))}</strong>
                     </Col>
                   </Row>
                 </Card.Body>

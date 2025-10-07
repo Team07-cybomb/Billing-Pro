@@ -22,9 +22,10 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Operations from './pages/Operations';
 import StaffLog from './pages/StaffLog';
 import SupportData from './pages/Support-data';
+import Homepage from './pages/Home';
 function ProtectedRoute({ children }) {
   const { user } = useAuth();
-  return user ? children : <Navigate to="/login" />;
+  return user ? children : <Navigate to="/home" />;
 }
 
 
@@ -37,6 +38,7 @@ function App() {
           <Navigation>
             <Container fluid className="mt-3">
               <Routes>
+                <Route path="/home" element={<Homepage />} />
                 <Route path="/login" element={<Login />} />
 
                 {/* Protected routes */}

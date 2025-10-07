@@ -82,6 +82,8 @@ const taxDetailsSchema = new mongoose.Schema({
 const formattedBillSchema = new mongoose.Schema({
   invoiceNumber: String,
   invoiceDate: String,
+  companyName: String, // <-- ADDED: Company Name
+  branchName: String, // <-- ADDED: Branch Name from company info
   customer: {
     name: String,
     phone: String,
@@ -180,17 +182,18 @@ invoiceSchema.pre('save', function(next) {
   next();
 });
 
-// Auto-generate invoice number
 invoiceSchema.pre('save', async function(next) {
-  if (this.isNew && !this.invoiceNumber) {
+  // Only auto-generate if it's a new document AND no invoiceNumber was provided
+  if (this.isNew && !this.invoiceNumber) { 
     try {
       const count = await mongoose.model('Invoice').countDocuments();
+      // This is the old, long format.
       this.invoiceNumber = `INV-${String(count + 1).padStart(4, '0')}-${Date.now().toString().slice(-4)}`;
     } catch (error) {
-      // Fallback invoice number
       this.invoiceNumber = `INV-${Date.now()}`;
     }
   }
+  // If this.invoiceNumber is already set by the frontend, this block is skipped.
   next();
 });
 

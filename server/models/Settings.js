@@ -2,7 +2,6 @@
 import mongoose from 'mongoose';
 
 const settingsSchema = new mongoose.Schema({
-    // Store all settings in one document (ID is usually hardcoded in backend logic, e.g., 'global_settings_id')
     settingsId: {
         type: String,
         required: true,
@@ -10,31 +9,34 @@ const settingsSchema = new mongoose.Schema({
         default: 'global_settings'
     },
 
-    // --- Company Info (Handled by frontend path /company) ---
+    // --- COMPANY INFO: ADDED GST-IN, BRANCH, CURRENCY ---
     company: {
         name: { type: String, default: 'Billing Pro Business Suite' },
         email: { type: String, default: 'contact@billingpro.com' },
         phone: { type: String, default: '+1 (555) 123-4567' },
-        address: { type: String, default: '123 Business Way, Suite 100, City, State, 12345' },
-        logo: { type: String } // URL or path to logo
+        address: { type: String, default: '123 Business Way, City, State, 12345' },
+        logo: { type: String }, // URL or path to logo
+        
+        // New Fields
+        branchLocation: { type: String },
+        gstIn: { type: String },
+        currency: { type: String, default: 'INR' } // e.g., INR, USD, EUR
     },
 
-    // --- System Preferences (Handled by frontend path /preferences) ---
-    preferences: {
-        operationalHours: { type: String, default: '9:00 - 17:00' },
-        enable2FA: { type: Boolean, default: false },
-        enableMaintenanceMode: { type: Boolean, default: false }
-    },
-
-    // --- Payment Settings (Handled by frontend path /payment - Logic will be simple placeholders) ---
+    // --- PAYMENT SETTINGS: ADDED BENEFICIARY, UPI, SWIFT, TERMS ---
     payment: {
         bankName: { type: String },
         accountNumber: { type: String },
         ifsc: { type: String },
-        paypalEmail: { type: String }
+        paypalEmail: { type: String },
+        
+        // New Fields
+        beneficiaryName: { type: String },
+        upiId: { type: String },
+        swiftCode: { type: String },
+        terms: { type: String, default: 'Payment due within 30 days.' }
     },
     
-    // --- Metadata ---
     updatedAt: {
         type: Date,
         default: Date.now

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Row, Col, Table, Modal, Form, Badge, Alert, InputGroup, Dropdown } from 'react-bootstrap';
-import { Plus, Search, Edit, Trash2, MoreVertical, Eye, Download, User, Phone, Mail, MapPin } from 'lucide-react';
+import { Card, Button, Row, Col, Table, Modal, Form, Badge, Alert, InputGroup, Dropdown, Spinner } from 'react-bootstrap';
+import { Plus, Search, Edit, Trash2, MoreVertical, Download, User, Phone, Mail, MapPin, Building } from 'lucide-react';
 import axios from 'axios';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext'; // FIX: Adjusted import path
 
 const Customers = () => {
   const { user } = useAuth();
@@ -19,12 +19,16 @@ const Customers = () => {
     fetchCustomers();
   }, []);
 
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
       const response = await axios.get('http://localhost:5000/api/customers', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: getAuthHeaders()
       });
       setCustomers(response.data);
     } catch (error) {
@@ -38,8 +42,6 @@ const Customers = () => {
   const handleSubmit = async (formData) => {
     setSubmitting(true);
     try {
-      const token = localStorage.getItem('token');
-
       if (!formData.name.trim() || !formData.phone.trim()) {
         showAlert('Name and phone number are required', 'warning');
         setSubmitting(false);
@@ -47,19 +49,17 @@ const Customers = () => {
       }
 
       if (formData._id) {
-        // Update existing
         await axios.put(
           `http://localhost:5000/api/customers/${formData._id}`,
           formData,
-          { headers: { Authorization: `Bearer ${token}` } }
+          { headers: getAuthHeaders() }
         );
         showAlert('Customer updated successfully!', 'success');
       } else {
-        // Create new
         await axios.post(
           'http://localhost:5000/api/customers',
           formData,
-          { headers: { Authorization: `Bearer ${token}` } }
+          { headers: getAuthHeaders() }
         );
         showAlert('Customer created successfully!', 'success');
       }
@@ -79,9 +79,8 @@ const Customers = () => {
     if (!window.confirm('Are you sure you want to delete this customer?')) return;
 
     try {
-      const token = localStorage.getItem('token');
       await axios.delete(`http://localhost:5000/api/customers/${customerId}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: getAuthHeaders()
       });
       await fetchCustomers();
       showAlert('Customer deleted successfully!', 'success');
@@ -115,10 +114,9 @@ const Customers = () => {
 
   const handleExportCSV = async () => {
     try {
-      const token = localStorage.getItem('token');
       const response = await axios.get('http://localhost:5000/api/customers/export/csv', {
         responseType: 'blob',
-        headers: { Authorization: `Bearer ${token}` }
+        headers: getAuthHeaders()
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
@@ -139,18 +137,25 @@ const Customers = () => {
     const searchLower = searchTerm.toLowerCase();
     return (
       customer.name?.toLowerCase().includes(searchLower) ||
+      customer.businessName?.toLowerCase().includes(searchLower) ||
       customer.phone?.includes(searchTerm) ||
       customer.email?.toLowerCase().includes(searchLower) ||
       customer.gstNumber?.toLowerCase().includes(searchLower)
     );
   });
 
-  // --- Customer Modal with local state ---
+  // --- Customer Modal with local state (Updated) ---
   const CustomerModal = ({ show, onHide, isEdit, initialData }) => {
-    const [formData, setFormData] = useState(initialData);
+    const [formData, setFormData] = useState({
+      ...initialData,
+      address: initialData.address || {} 
+    });
 
     useEffect(() => {
-      setFormData(initialData);
+      setFormData({
+        ...initialData,
+        address: initialData.address || {}
+      });
     }, [initialData]);
 
     const handleChange = (e) => {
@@ -185,7 +190,7 @@ const Customers = () => {
             <Row>
               <Col md={6}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Name *</Form.Label>
+                  <Form.Label>Contact Person Name *</Form.Label>
                   <InputGroup>
                     <InputGroup.Text><User size={16} /></InputGroup.Text>
                     <Form.Control
@@ -199,6 +204,24 @@ const Customers = () => {
                   </InputGroup>
                 </Form.Group>
               </Col>
+              
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Business/Organization Name</Form.Label>
+                  <InputGroup>
+                    <InputGroup.Text><Building size={16} /></InputGroup.Text>
+                    <Form.Control
+                      type="text"
+                      name="businessName"
+                      value={formData.businessName}
+                      onChange={handleChange}
+                      placeholder="e.g., Acme Corp"
+                      disabled={submitting}
+                    />
+                  </InputGroup>
+                </Form.Group>
+              </Col>
+              
               <Col md={6}>
                 <Form.Group className="mb-3">
                   <Form.Label>Phone *</Form.Label>
@@ -215,31 +238,39 @@ const Customers = () => {
                   </InputGroup>
                 </Form.Group>
               </Col>
+              
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Email</Form.Label>
+                  <InputGroup>
+                    <InputGroup.Text><Mail size={16} /></InputGroup.Text>
+                    <Form.Control
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      disabled={submitting}
+                    />
+                  </InputGroup>
+                </Form.Group>
+              </Col>
+              
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>GST Number</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="gstNumber"
+                    value={formData.gstNumber}
+                    onChange={handleChange}
+                    disabled={submitting}
+                    placeholder="22AAAAA0000A1Z5"
+                  />
+                </Form.Group>
+              </Col>
             </Row>
-            <Form.Group className="mb-3">
-              <Form.Label>Email</Form.Label>
-              <InputGroup>
-                <InputGroup.Text><Mail size={16} /></InputGroup.Text>
-                <Form.Control
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  disabled={submitting}
-                />
-              </InputGroup>
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>GST Number</Form.Label>
-              <Form.Control
-                type="text"
-                name="gstNumber"
-                value={formData.gstNumber}
-                onChange={handleChange}
-                disabled={submitting}
-              />
-            </Form.Group>
-            <Card className="border">
+            
+            <Card className="border mt-3">
               <Card.Header><MapPin size={16} className="me-2" /> Address</Card.Header>
               <Card.Body>
                 <Form.Group className="mb-3">
@@ -333,7 +364,7 @@ const Customers = () => {
                 <Search size={18} className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted" />
                 <Form.Control
                   type="text"
-                  placeholder="Search..."
+                  placeholder="Search by name, phone, or organization..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="ps-5"
@@ -347,15 +378,17 @@ const Customers = () => {
         </Card.Header>
         <Card.Body className="p-0">
           {loading ? (
-            <div className="text-center py-5">Loading...</div>
+            <div className="text-center py-5">
+              <Spinner animation="border" size="sm" /> Loading...
+            </div>
           ) : (
             <Table responsive hover>
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Contact</th>
-                  {/* <th>GST</th> */}
-                  <th>Address</th>
+                  <th>Contact Name</th>
+                  <th>Organization</th>
+                  <th>Phone / Email</th>
+                  <th>City</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -363,9 +396,17 @@ const Customers = () => {
               <tbody>
                 {filteredCustomers.map(customer => (
                   <tr key={customer._id}>
-                    <td>{customer.name}</td>
-                    <td>{customer.phone} {customer.email && <><br />{customer.email}</>}</td>
-                    {/* <td>{customer.gstNumber || '-'}</td> */}
+                    <td>
+                        <div className='fw-semibold'>{customer.name}</div>
+                        {customer.gstNumber && <small className='text-muted'>GST: {customer.gstNumber}</small>}
+                    </td>
+                    <td>
+                        <div className='fw-bold'>{customer.businessName || 'Individual'}</div>
+                    </td>
+                    <td>
+                        <div>{customer.phone}</div>
+                        {customer.email && <small className='text-muted'>{customer.email}</small>}
+                    </td>
                     <td>{customer.address?.city || '-'}</td>
                     <td><Badge bg="success">Active</Badge></td>
                     <td>
@@ -383,6 +424,11 @@ const Customers = () => {
                     </td>
                   </tr>
                 ))}
+                {filteredCustomers.length === 0 && (
+                  <tr>
+                    <td colSpan="6" className="text-center py-4 text-muted">No customers found matching your search.</td>
+                  </tr>
+                )}
               </tbody>
             </Table>
           )}
@@ -396,6 +442,7 @@ const Customers = () => {
         isEdit={false}
         initialData={{
           name: '',
+          businessName: '', // NEW FIELD
           email: '',
           phone: '',
           address: { street: '', city: '', state: '', zipCode: '' },

@@ -4,6 +4,8 @@ import { Card, Table, Row, Col, Form, Badge, Button, Alert } from 'react-bootstr
 import { Calendar, Filter, Download } from 'lucide-react';
 import axios from 'axios';
 
+const SETTINGS_API_BASE_URL = "http://localhost:5000/api/settings";
+
 const History = () => {
   const [transactions, setTransactions] = useState([]);
   const [filterStatus, setFilterStatus] = useState('all');
@@ -13,8 +15,17 @@ const History = () => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // NEW STATE: Dynamic Currency
+  const [currencySymbol, setCurrencySymbol] = useState('₹'); 
+  const [currencyCode, setCurrencyCode] = useState('INR'); 
 
   // --- Utility Functions ---
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   const getStatusVariant = (status) => {
     switch (status) {
       case 'paid': return 'success';
@@ -39,12 +50,47 @@ const History = () => {
   };
   
   const getSequentialInvoiceNumber = (index) => {
-      // Use the same 4-digit padded sequential number logic
       return `INV-${(index + 1).toString().padStart(4, '0')}`;
   }
 
+  // Helper to format currency based on state
+  const formatCurrency = (amount) => {
+    const numAmount = Number(amount) || 0;
+    
+    // Use Intl.NumberFormat for robust formatting
+    const formatted = new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numAmount);
+
+    // Replace the default symbol if a custom one is preferred/defined
+    if (formatted.includes(currencyCode)) {
+        return formatted.replace(currencyCode, currencySymbol).trim();
+    }
+    
+    return `${currencySymbol} ${numAmount.toFixed(2).toLocaleString()}`;
+  };
+
 
   // --- Data Fetching ---
+  
+  const fetchSettings = useCallback(async () => {
+    try {
+        const res = await axios.get(SETTINGS_API_BASE_URL, { headers: getAuthHeaders() });
+        const currencySetting = res.data.company?.currency || 'INR';
+        setCurrencyCode(currencySetting);
+        
+        // Simple mapping for common symbols
+        const symbolMap = { 'INR': '₹', 'USD': '$', 'EUR': '€', 'GBP': '£', 'AUD': 'A$', 'CAD': 'C$' };
+        setCurrencySymbol(symbolMap[currencySetting] || currencySetting);
+    } catch (error) {
+        console.warn("Could not fetch currency settings, defaulting to INR.");
+    }
+  }, []);
+
+
   const fetchTransactions = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -84,9 +130,20 @@ const History = () => {
     }
   }, [filterStatus, dateRange.start, dateRange.end]);
 
+  
+  const initialFetch = useCallback(async () => {
+      setLoading(true);
+      await Promise.all([
+          fetchSettings(), // Fetch settings first
+          fetchTransactions()
+      ]);
+      setLoading(false);
+  }, [fetchSettings, fetchTransactions]);
+
+
   useEffect(() => {
-    fetchTransactions();
-  }, [fetchTransactions]);
+    initialFetch();
+  }, [initialFetch]);
 
   // --- Sorting and Summaries ---
   
@@ -112,7 +169,6 @@ const History = () => {
   // --- Action Handlers ---
 
   const handleApplyFilter = () => {
-    // Re-trigger fetchTransactions via its dependency array updates
     fetchTransactions();
   };
 
@@ -172,7 +228,7 @@ const History = () => {
           <Card className="text-center shadow-sm border-0 h-100">
             <Card.Body className="p-4">
               <div className="bg-success bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style={{ width: '60px', height: '60px' }}>
-                <span className="text-success fw-bold fs-4">₹{(totalRevenue || 0).toFixed(2).toLocaleString('en-IN')}</span>
+                <span className="text-success fw-bold fs-4">{formatCurrency(totalRevenue)}</span>
               </div>
               <h5 className="fw-semibold">Total Revenue</h5>
               <p className="text-muted mb-0">All paid transactions</p>
@@ -202,6 +258,12 @@ const History = () => {
           </Card>
         </Col>
       </Row>
+      
+      {/* Dynamic Currency Display Alert */}
+      <Alert variant="info" className="mb-4 py-2 small">
+          Transactions Displayed in: <strong className='text-uppercase'>{currencyCode} ({currencySymbol})</strong>
+      </Alert>
+
 
       {/* Filters */}
       <Card className="shadow-sm border-0 mb-4">
@@ -299,7 +361,6 @@ const History = () => {
                     <td>
                       <div>
                         <div className="fw-semibold">Invoice Payment</div>
-                        {/* Assuming items array is populated */}
                         <small className="text-muted">{transaction.items?.length || 0} items</small>
                       </div>
                     </td>
@@ -310,13 +371,11 @@ const History = () => {
                             {transaction.customer?.name?.charAt(0)?.toUpperCase() || 'C'}
                           </span>
                         </div>
-                        {/* Ensure customer data is handled safely */}
                         {transaction.customer?.name || 'N/A'}
                       </div>
                     </td>
                     <td className={`fw-semibold text-${getStatusVariant(transaction.status)}`}>
-                      {/* FIX: Use consistent currency formatting */}
-                      ₹{(transaction.total || 0).toFixed(2)}
+                      {formatCurrency(transaction.total)}
                     </td>
                     <td>
                       <Badge bg={getStatusVariant(transaction.status)} className="rounded-pill">
@@ -327,10 +386,8 @@ const History = () => {
                       {new Date(transaction.createdAt).toLocaleDateString()}
                     </td>
                     <td className="fw-semibold text-primary">
-                      {/* FIX: Use sequential invoice numbering */}
                       <div className='d-flex flex-column'>
                         <span className='fw-bold'>#{getSequentialInvoiceNumber(index)}</span>
-                        {/* <small className="text-muted fw-normal fst-italic">{transaction.invoiceNumber}</small> */}
                       </div>
                     </td>
                   </tr>
