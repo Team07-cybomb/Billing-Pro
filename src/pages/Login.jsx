@@ -47,7 +47,7 @@ const Login = () => {
   
   // Custom back button function
   const handleGoHome = () => {
-      navigate('/');
+      navigate('/home');
   };
 
   return (
@@ -147,11 +147,11 @@ const Login = () => {
                   </Form>
                   
                   {/* Footer Info */}
-                  <div className="text-center mt-4 pt-3 border-top">
+                  {/* <div className="text-center mt-4 pt-3 border-top">
                     <small className="text-muted">
                       Demo Credentials: <span className="fw-semibold">admin@billing.com</span> / <span className="fw-semibold">password</span>
                     </small>
-                  </div>
+                  </div> */}
                   <div className="text-center mt-3 d-md-none">
                       <Button 
                         variant="link" 

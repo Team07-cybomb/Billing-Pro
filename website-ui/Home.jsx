@@ -5,6 +5,7 @@ import {
   FileText, DollarSign, Users, TrendingUp, CheckCircle,
   Zap, ClipboardList, Clock, Shield, ArrowRight, Star, Play
 } from 'lucide-react';
+// Import the new components
 
 
 
@@ -64,7 +65,7 @@ const CustomStyles = () => (
     html { scroll-behavior: smooth; }
     .min-h-screen { min-height: 100vh; }
 
-    /* Header improvements */
+    /* Header improvements - Note: logo-wrapper is still needed for Header.jsx styles */
     header.site-header { z-index: 1050; backdrop-filter: blur(6px); }
     .logo-wrapper { width: 44px; height: 44px; }
 
@@ -90,7 +91,7 @@ const CustomStyles = () => (
     .text-white-50 { color: rgba(255,255,255,0.8) !important; }
     .bg-pattern { background-image: radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 24px 24px; }
 
-    /* Footer */
+    /* Footer - Note: these styles are still needed for Footer.jsx */
     footer.site-footer { background: #0f1724; color: rgba(255,255,255,0.85); }
     footer.site-footer a { color: rgba(255,255,255,0.7); }
 
@@ -118,6 +119,7 @@ const FeatureCard = ({ icon: Icon, title, description, badge }) => (
   </Card>
 );
 
+// StatCard component is no longer used, but kept for context if needed later.
 const StatCard = ({ number, label, suffix }) => (
   <div className="text-center" role="contentinfo">
     <h3 className="fw-bold text-primary display-6 mb-1">{number}{suffix}</h3>
@@ -139,28 +141,6 @@ const Homepage = () => {
   return (
     <div className="font-sans min-h-screen bg-light">
       <CustomStyles />
-
-      {/* Header */}
-      <header className="site-header py-3 shadow-sm bg-white sticky-top" role="navigation">
-        <Container>
-          <div className="d-flex justify-content-between align-items-center">
-            <div className="d-flex align-items-center">
-              <div className="logo-wrapper bg-gradient-primary rounded-circle d-flex align-items-center justify-content-center me-3" aria-hidden="true">
-                <Zap size={20} className="text-white" aria-hidden="true" />
-              </div>
-              <a href="/" className="h5 fw-bold text-dark mb-0 text-decoration-none" aria-label="Billing Pro homepage">
-                Billing<span className="text-primary">Pro</span>
-              </a>
-            </div>
-            <div className="d-flex align-items-center gap-2">
-              <Button variant="outline-primary" onClick={() => navigate('/login')} className="fw-semibold rounded-pill px-3 py-2" type="button">Sign In</Button>
-              <Button variant="primary" onClick={() => navigate('/login')} className="fw-semibold rounded-pill px-3 py-2 gradient-btn" type="button">
-                <Zap size={16} className="me-2" aria-hidden="true" /> Get Started
-              </Button>
-            </div>
-          </div>
-        </Container>
-      </header>
 
       {/* Hero */}
       <section ref={heroRef} className={`py-5 position-relative`} style={{ background: 'linear-gradient(135deg,#667eea 0%, #764ba2 100%)' }}>
@@ -338,57 +318,7 @@ const Homepage = () => {
         </Container>
       </section>
 
-      {/* Footer */}
-      <footer className="site-footer py-4">
-        <Container>
-          <Row className="g-4">
-            <Col lg={4}>
-              <div className="d-flex align-items-center mb-3">
-                <div className="logo-wrapper bg-gradient-primary rounded-circle d-flex align-items-center justify-content-center me-3" aria-hidden="true">
-                  <Zap size={18} className="text-white" />
-                </div>
-                <h5 className="fw-bold text-white mb-0">Billing<span className="text-primary">Pro</span></h5>
-              </div>
-              <p className="small mb-0">The complete billing and inventory management solution for modern businesses.</p>
-            </Col>
-            <Col lg={2} md={4} sm={6}>
-              <h6 className="text-white fw-bold mb-3">Product</h6>
-              <ul className="list-unstyled small">
-                <li className="mb-2"><a href="#features" className="text-white-50 text-decoration-none">Features</a></li>
-                <li className="mb-2"><a href="#pricing" className="text-white-50 text-decoration-none">Pricing</a></li>
-                <li className="mb-2"><a href="#security" className="text-white-50 text-decoration-none">Security</a></li>
-              </ul>
-            </Col>
-            <Col lg={2} md={4} sm={6}>
-              <h6 className="text-white fw-bold mb-3">Support</h6>
-              <ul className="list-unstyled small">
-                <li className="mb-2"><a href="#help" className="text-white-50 text-decoration-none">Help Center</a></li>
-                <li className="mb-2"><a href="#contact" className="text-white-50 text-decoration-none">Contact Us</a></li>
-                <li className="mb-2"><a href="#status" className="text-white-50 text-decoration-none">System Status</a></li>
-              </ul>
-            </Col>
-            <Col lg={2} md={4} sm={6}>
-              <h6 className="text-white fw-bold mb-3">Company</h6>
-              <ul className="list-unstyled small">
-                <li className="mb-2"><a href="#about" className="text-white-50 text-decoration-none">About</a></li>
-                <li className="mb-2"><a href="#careers" className="text-white-50 text-decoration-none">Careers</a></li>
-                <li className="mb-2"><a href="#blog" className="text-white-50 text-decoration-none">Blog</a></li>
-              </ul>
-            </Col>
-          </Row>
 
-          <hr className="my-3" style={{borderColor: 'rgba(255,255,255,0.06)'}} />
-
-          <div className="d-flex flex-column flex-md-row justify-content-between align-items-center small">
-            <p className="mb-2 mb-md-0">&copy; {new Date().getFullYear()} Billing Pro. All rights reserved.</p>
-            <div className="d-flex gap-3">
-              <a href="#privacy" className="text-white-50 text-decoration-none">Privacy</a>
-              <a href="#terms" className="text-white-50 text-decoration-none">Terms</a>
-              <a href="#cookies" className="text-white-50 text-decoration-none">Cookies</a>
-            </div>
-          </div>
-        </Container>
-      </footer>
     </div>
   );
 };

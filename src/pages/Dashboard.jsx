@@ -733,7 +733,7 @@ const Dashboard = () => {
       </div>
 
       {/* FOOTER BRANDING ADDED HERE */}
-      <div className="mt-4 pt-3 border-top text-center text-muted small">
+      <div className="mt-2 mb-4  pt-3 border-top text-center text-muted small">
           Powered by **Cybomb Technologies**
       </div>
 

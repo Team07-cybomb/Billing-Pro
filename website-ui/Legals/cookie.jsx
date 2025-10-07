@@ -10,12 +10,12 @@ const CookiePolicy = () => {
             <Container className="my-5">
                 <Button 
                     as={Link} 
-                    to="/legal" 
+                    to="/home" 
                     variant="outline-primary" 
                     className="mb-4 rounded-pill d-inline-flex align-items-center"
                 >
                     <ArrowLeft size={18} className="me-2" />
-                    Back to Legal Documents
+                    Back to Home
                 </Button>
 
                 <Card className="shadow-lg border-0">
@@ -152,8 +152,8 @@ const CookiePolicy = () => {
 
                         <p className="mt-5 pt-3 border-top text-center text-muted">
                             For any questions regarding our use of cookies, please contact us at{' '}
-                            <a href="mailto:privacy@billingpro.com" className="text-primary text-decoration-none">
-                                privacy@billingpro.com
+                            <a href="mailto:support@cybomb.com" className="text-primary text-decoration-none">
+                                support@cybomb.com
                             </a>.
                         </p>
                     </Card.Body>

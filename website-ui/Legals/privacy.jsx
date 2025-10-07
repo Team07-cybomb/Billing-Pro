@@ -4,18 +4,18 @@ import { Container, Card, Button } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { Shield, ArrowLeft } from 'lucide-react';
 
-const PrivacyPolicy = () => {
+const Privacy = () => {
     return (
         <div className="font-sans min-h-screen bg-light py-5">
             <Container className="my-5">
                 <Button 
                     as={Link} 
-                    to="/legal" 
+                    to="/home" 
                     variant="outline-primary" 
                     className="mb-4 rounded-pill d-inline-flex align-items-center"
                 >
                     <ArrowLeft size={18} className="me-2" />
-                    Back to Legal Documents
+                    Back to Home
                 </Button>
 
                 <Card className="shadow-lg border-0">
@@ -144,8 +144,8 @@ const PrivacyPolicy = () => {
 
                         <p className="mt-5 pt-3 border-top text-center text-muted">
                             For any questions regarding this Privacy Policy, please contact our legal department at{' '}
-                            <a href="mailto:privacy@billingpro.com" className="text-primary text-decoration-none">
-                                privacy@billingpro.com
+                            <a href="mailto:support@cybomb.com" className="text-primary text-decoration-none">
+                                support@cybomb.com
                             </a>.
                         </p>
                     </Card.Body>
@@ -172,4 +172,4 @@ const PrivacyPolicy = () => {
     );
 };
 
-export default PrivacyPolicy;
+export default Privacy;

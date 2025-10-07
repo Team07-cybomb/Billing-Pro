@@ -150,7 +150,7 @@ const Navigation = ({ children }) => {
         className="flex-grow-1"
         style={{ marginLeft: user ? "260px" : "0" }}
       >
-        <div className="p-4 bg-light min-vh-100">{children}</div>
+        <div className="bg-light min-vh-100">{children}</div>
       </div>
 
       {/* Custom CSS for hover effects */}
