@@ -46,7 +46,9 @@ const Navigation = ({ children }) => {
     { path: "/stafflogs", label: "Staff Logs", icon: ClipboardList, roles: ['staff'] }, // Only for Staff
     
     // Core utility/Admin Items
-    { path: "/support", label: "Support", icon: HelpCircle, roles: ['admin', 'staff'] },
+    { path: "/support", label: "Support", icon: HelpCircle, roles: ['staff'] },
+    
+    { path: "/support-data", label: "Support", icon: HelpCircle, roles: ['admin'] },
     { path: "/settings", label: "Settings", icon: Settings, roles: ['admin'] },
   ];
 
