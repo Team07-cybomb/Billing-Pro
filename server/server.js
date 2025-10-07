@@ -13,6 +13,7 @@ import inventoryRoutes from './routes/inventory.js';
 import reportRoutes from './routes/reports.js';
 import staffRoutes from './routes/stafflogs.js';
 import settingsRoutes from './routes/settings.js';
+import supportRoutes from './routes/support.js';
 dotenv.config();
 
 const app = express();
@@ -38,6 +39,7 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/stafflogs', staffRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/support', supportRoutes);
 // Basic route for testing
 app.get('/api/test', (req, res) => {
   res.json({ message: 'Backend is working!' });
