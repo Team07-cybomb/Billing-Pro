@@ -1,4 +1,3 @@
-
 // models/SupportTicket.js
 import mongoose from 'mongoose';
 
@@ -45,17 +44,6 @@ const supportTicketSchema = new mongoose.Schema({
     }
 });
 
-// Auto-generate Ticket ID before saving
-supportTicketSchema.pre('save', async function(next) {
-    if (this.isNew) {
-        try {
-            const count = await mongoose.model('SupportTicket').countDocuments();
-            this.ticketId = `TKT-${String(count + 1).padStart(5, '0')}`;
-        } catch (error) {
-            this.ticketId = `TKT-${Date.now().toString().slice(-6)}`;
-        }
-    }
-    next();
-});
+// The pre-save middleware for auto-generating the ticketId has been removed.
 
 export default mongoose.model('SupportTicket', supportTicketSchema);

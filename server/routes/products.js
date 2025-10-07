@@ -3,7 +3,7 @@ import express from 'express';
 import Product from '../models/Product.js';
 import { auth } from '../middleware/auth.js';
 import pkg from 'csv-writer';
-import { sendRestockNotification, sendLowStockOrderSuggestion } from '../../utils/emailService.js';
+import { sendRestockNotification, sendLowStockOrderSuggestion } from '../utils/emailService.js';
 const createObjectCsvStringifier = pkg.createObjectCsvStringifier;
 
 const router = express.Router();
