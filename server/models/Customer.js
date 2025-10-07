@@ -1,10 +1,19 @@
+// models/Customer.js
 import mongoose from 'mongoose';
+import { parse } from 'postcss';
 
 const customerSchema = new mongoose.Schema({
   name: { 
     type: String, 
     required: true,
     trim: true
+  },
+  // NEW FIELD: Business Name
+  businessName: {
+    type: String,
+    trim: true,
+    index: true,
+    sparse: true, // Index for fast searching
   },
   email: {
     type: String,

@@ -1,13 +1,10 @@
-// Reports.jsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, Row, Col, Spinner, Alert, Button, Badge, Table } from 'react-bootstrap';
 import axios from 'axios';
-import { TrendingUp, DollarSign, Clock, Package, BarChart, UserCheck, ListTodo, RefreshCw, ChevronUp, ChevronDown } from 'lucide-react';
+import { TrendingUp, DollarSign, Clock, Package, BarChart, RefreshCw, ChevronUp, ChevronDown } from 'lucide-react';
 
-// NOTE: Assuming you have a way to determine the user's role (e.g., via useAuth context)
-// For this example, we'll assume a local state for the role.
-
-// --- Helper Functions (Moved outside the component for re-render optimization) ---
+// API Endpoints
+const SETTINGS_API_BASE_URL = "http://localhost:5000/api/settings";
 
 const getStatusBadge = (status) => {
     switch (status) {
@@ -20,19 +17,57 @@ const getStatusBadge = (status) => {
 
 const Reports = ({ userRole = 'admin' }) => {
   const [invoices, setInvoices] = useState([]);
-  const [staffLogs, setStaffLogs] = useState([]); // State for Staff Logs
+  const [staffLogs, setStaffLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  // State for sorting the detailed logs table
   const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'descending' });
+  
+  // NEW STATE: Dynamic Currency
+  const [currencySymbol, setCurrencySymbol] = useState('₹'); 
+  const [currencyCode, setCurrencyCode] = useState('INR'); 
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('token');
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
+  
+  // Helper to format currency based on state
+  const formatCurrency = (amount) => {
+    // Ensure amount is a number
+    const numAmount = Number(amount) || 0;
+    
+    // Use Intl.NumberFormat for robust formatting
+    const formatted = new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numAmount);
+
+    // Replace the default symbol if a custom one is defined, or fallback
+    if (formatted.includes(currencyCode)) {
+        return formatted.replace(currencyCode, currencySymbol).trim();
+    }
+    
+    return `${currencySymbol} ${numAmount.toFixed(2).toLocaleString()}`;
+  };
 
   // --- Data Fetching ---
+  
+  const fetchSettings = useCallback(async () => {
+    try {
+        const res = await axios.get(SETTINGS_API_BASE_URL, { headers: getAuthHeaders() });
+        const currencySetting = res.data.company?.currency || 'INR';
+        setCurrencyCode(currencySetting);
+        
+        // Simple mapping for common symbols, fallback to code if needed
+        const symbolMap = { 'INR': '₹', 'USD': '$', 'EUR': '€', 'GBP': '£', 'AUD': 'A$', 'CAD': 'C$' };
+        setCurrencySymbol(symbolMap[currencySetting] || currencySetting);
+    } catch (error) {
+        console.warn("Could not fetch currency settings, defaulting to INR.");
+    }
+  }, []);
+
 
   const fetchInvoices = useCallback(async () => {
     setError(null);
@@ -46,9 +81,7 @@ const Reports = ({ userRole = 'admin' }) => {
       const processedInvoices = Array.isArray(invoicesData) 
         ? invoicesData.map(inv => ({ 
             ...inv, 
-            // FIX 1: Normalize status to lowercase for robust calculation
             status: (inv.status || '').toLowerCase(), 
-            // FIX 2: Ensure total is a valid float
             total: parseFloat(inv.total) || 0.00 
         }))
         : [];
@@ -64,7 +97,6 @@ const Reports = ({ userRole = 'admin' }) => {
       if (userRole !== 'admin') return; 
       
       try {
-          // Fetch all staff logs (assuming this endpoint allows admin to see all logs)
           const response = await axios.get('http://localhost:5000/api/stafflogs', { 
               headers: getAuthHeaders() 
           });
@@ -80,11 +112,12 @@ const Reports = ({ userRole = 'admin' }) => {
       setLoading(true);
       setError(null);
       await Promise.all([
+          fetchSettings(), // Fetch settings first
           fetchInvoices(),
           fetchStaffLogs()
       ]);
       setLoading(false);
-  }, [fetchInvoices, fetchStaffLogs]);
+  }, [fetchSettings, fetchInvoices, fetchStaffLogs]);
 
   useEffect(() => {
     initialFetch();
@@ -97,7 +130,6 @@ const Reports = ({ userRole = 'admin' }) => {
     let outstandingBalance = 0;
 
     invoices.forEach(inv => {
-      // Use normalized status (lowercase) for reliable check
       if (inv.status === 'paid') {
         revenue += inv.total;
       } else if (inv.status === 'pending' || inv.status === 'overdue' || inv.status === 'draft') {
@@ -154,18 +186,13 @@ const Reports = ({ userRole = 'admin' }) => {
     return { totalTasks, completedTasks, pendingTasks, completionRate, uniqueStaff };
   }, [staffLogs]);
 
-  // Helper to format currency (assuming '₹')
-  const formatCurrency = (amount) => `₹${amount.toFixed(2).toLocaleString('en-IN')}`;
 
   // --- Sorting Logic for Staff Logs Table ---
 
   const sortedLogs = useMemo(() => {
-    // 1. Create a copy of the logs to sort
     let sortableItems = [...staffLogs];
     
-    // 2. Sort based on config
     sortableItems.sort((a, b) => {
-      // Handle date fields
       if (sortConfig.key === 'createdAt' || sortConfig.key === 'date') {
         const dateA = new Date(a[sortConfig.key]);
         const dateB = new Date(b[sortConfig.key]);
@@ -173,7 +200,6 @@ const Reports = ({ userRole = 'admin' }) => {
         if (dateA > dateB) return sortConfig.direction === 'ascending' ? 1 : -1;
         return 0;
       } 
-      // Handle string fields (userName, category, status)
       if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'ascending' ? -1 : 1;
       if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'ascending' ? 1 : -1;
       return 0;
@@ -195,24 +221,14 @@ const Reports = ({ userRole = 'admin' }) => {
     return sortConfig.direction === 'ascending' ? <ChevronUp size={14} className="ms-1" /> : <ChevronDown size={14} className="ms-1" />;
   };
 
-
-  // --- Render Logic ---
-
-  if (loading) {
-    return (
-      <div className="p-5 text-center">
-        <Spinner animation="border" size="sm" className="me-2" />
-        Loading Reports...
-      </div>
-    );
-  }
-
-  if (error) {
-    return <Alert variant="danger" className="m-4">{error}</Alert>;
-  }
+  // --- FIX: Renaming helper function for clarity and correctness ---
+  const getTableHeaderIcon = (key) => {
+      // Correctly uses the implemented getSortIcon
+      return getSortIcon(key);
+  };
 
 
-  // --- Staff Logs Detail Table Component (Inner Component - same) ---
+  // --- Staff Logs Detail Table Component (Inner Component) ---
   const StaffLogsTable = () => (
     <Card className="shadow-sm border-0 mb-5">
       <Card.Header className="bg-white py-3">
@@ -227,20 +243,20 @@ const Reports = ({ userRole = 'admin' }) => {
                     <tr>
                         <th>#</th>
                         <th onClick={() => requestSort('userName')} className="cursor-pointer">
-                            Staff Name {getSortIcon('userName')}
+                            Staff Name {getTableHeaderIcon('userName')}
                         </th>
                         <th onClick={() => requestSort('category')} className="cursor-pointer">
-                            Category {getSortIcon('category')}
+                            Category {getTableHeaderIcon('category')}
                         </th>
                         <th>Task Details</th>
                         <th onClick={() => requestSort('status')} className="cursor-pointer">
-                            Status {getSortIcon('status')}
+                            Status {getTableHeaderIcon('status')}
                         </th>
                         <th onClick={() => requestSort('date')} className="cursor-pointer">
-                            Activity Date {getSortIcon('date')}
+                            Activity Date {getTableHeaderIcon('date')}
                         </th>
                         <th onClick={() => requestSort('createdAt')} className="cursor-pointer">
-                            Logged Time {getSortIcon('createdAt')}
+                            Logged Time {getTableHeaderIcon('createdAt')}
                         </th>
                     </tr>
                 </thead>
@@ -282,6 +298,12 @@ const Reports = ({ userRole = 'admin' }) => {
           </Button>
         </Col>
       </Row>
+      
+      {/* Dynamic Currency Display */}
+      <Alert variant="info" className="mb-4 py-2 small">
+          Primary Reporting Currency: <strong className='text-uppercase'>{currencyCode} ({currencySymbol})</strong>
+      </Alert>
+
 
       {/* 1. FINANCIAL OVERVIEW (Admin Only) */}
       {userRole === 'admin' && (
@@ -289,13 +311,11 @@ const Reports = ({ userRole = 'admin' }) => {
           <h3 className="h5 mb-3 text-primary">Financial Summary (Admin View)</h3>
           <Row className="g-4 mb-5">
             <Col md={4}>
-              {/* Card for Total Revenue */}
               <Card className="shadow-sm border-0 border-start border-5 border-success h-100">
                 <Card.Body>
                   <div className="d-flex justify-content-between align-items-center">
                     <div>
                       <h6 className="text-success text-uppercase mb-2">Total Revenue (Paid)</h6>
-                      {/* totalRevenue should now be correct due to robust fetching/memoizing */}
                       <h3 className="fw-bold">{formatCurrency(totalRevenue)}</h3> 
                     </div>
                     <DollarSign size={36} className="text-success opacity-75" />
@@ -304,7 +324,6 @@ const Reports = ({ userRole = 'admin' }) => {
               </Card>
             </Col>
             <Col md={4}>
-              {/* Card for Outstanding A/R */}
               <Card className="shadow-sm border-0 border-start border-5 border-warning h-100">
                 <Card.Body>
                   <div className="d-flex justify-content-between align-items-center">
@@ -318,7 +337,6 @@ const Reports = ({ userRole = 'admin' }) => {
               </Card>
             </Col>
             <Col md={4}>
-              {/* Card for Total Transactions */}
               <Card className="shadow-sm border-0 border-start border-5 border-primary h-100">
                 <Card.Body>
                   <div className="d-flex justify-content-between align-items-center">
@@ -335,7 +353,7 @@ const Reports = ({ userRole = 'admin' }) => {
         </>
       )}
 
-      {/* 2. STAFF LOGS SUMMARY (Admin Only) (same) */}
+      {/* 2. STAFF LOGS SUMMARY (Admin Only) */}
       {userRole === 'admin' && (
         <>
           <h3 className="h5 mb-3 text-primary">Staff Activity Overview</h3>
@@ -366,14 +384,13 @@ const Reports = ({ userRole = 'admin' }) => {
               </Card.Body>
           </Card>
           
-          {/* 3. STAFF LOGS DETAIL TABLE (NEW SECTION) */}
           <h3 className="h5 mb-3 text-primary">Staff Log Details</h3>
           <StaffLogsTable />
         </>
       )}
 
 
-      {/* 4. SALES OVER TIME (General Use / Admin) (same) */}
+      {/* 3. SALES OVER TIME */}
       <h3 className="h5 mb-3 text-primary">Sales Trend Analysis</h3>
       <Card className="shadow-sm border-0 mb-5">
         <Card.Body>
@@ -399,7 +416,7 @@ const Reports = ({ userRole = 'admin' }) => {
       </Card>
 
 
-      {/* 5. PRODUCT PERFORMANCE (Staff/Admin) (same) */}
+      {/* 4. PRODUCT PERFORMANCE */}
       <h3 className="h5 mb-3 text-primary">Top Selling Products</h3>
       <Card className="shadow-sm border-0">
         <Card.Body>

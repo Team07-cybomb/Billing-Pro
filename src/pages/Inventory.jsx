@@ -1,9 +1,10 @@
-// Inventory.jsx
-import React, { useState, useEffect, useCallback, useMemo } from 'react'; // <-- FIX: ADDED useMemo HERE
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, Table, Row, Col, Button, Badge, Form, Modal, ProgressBar, InputGroup, Alert } from 'react-bootstrap';
-import { Plus, Search, Package, AlertTriangle, TrendingUp, Edit, Zap } from 'lucide-react';
+import { Plus, Search, Package, AlertTriangle, TrendingUp, Edit, Zap, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
+
+const SETTINGS_API_BASE_URL = "http://localhost:5000/api/settings";
 
 const Inventory = () => {
   const [products, setProducts] = useState([]);
@@ -15,10 +16,56 @@ const Inventory = () => {
   const [currentProduct, setCurrentProduct] = useState(null);
   const [restockAmount, setRestockAmount] = useState(0);
 
+  // --- CURRENCY STATE ---
+  const [currencySymbol, setCurrencySymbol] = useState('₹'); 
+  const [currencyCode, setCurrencyCode] = useState('INR'); 
+  
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   const showAlert = (message, type = 'success') => {
     setAlert({ show: true, message, type });
     setTimeout(() => setAlert({ show: false, message: '', type: '' }), 4000);
   };
+  
+  // Helper to format currency based on state
+  const formatCurrency = (amount) => {
+    const numAmount = Number(amount) || 0;
+    
+    const formatted = new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numAmount);
+
+    const symbolMap = { 'INR': '₹', 'USD': '$', 'EUR': '€', 'GBP': '£', 'AUD': 'A$', 'CAD': 'C$' };
+    const displaySymbol = symbolMap[currencyCode] || currencySymbol;
+
+    if (formatted.includes(currencyCode)) {
+        return formatted.replace(currencyCode, displaySymbol).trim();
+    }
+    
+    return `${displaySymbol} ${numAmount.toFixed(2).toLocaleString()}`;
+  };
+  
+  // --- Data Fetching ---
+
+  const fetchSettings = useCallback(async () => {
+    try {
+        const res = await axios.get(SETTINGS_API_BASE_URL, { headers: getAuthHeaders() });
+        const currencySetting = res.data.company?.currency || 'INR';
+        setCurrencyCode(currencySetting);
+        
+        const symbolMap = { 'INR': '₹', 'USD': '$', 'EUR': '€', 'GBP': '£', 'AUD': 'A$', 'CAD': 'C$' };
+        setCurrencySymbol(symbolMap[currencySetting] || currencySetting);
+    } catch (error) {
+        console.warn("Could not fetch currency settings for Inventory, defaulting to INR.");
+    }
+  }, []);
+
 
   const fetchInventory = useCallback(async () => {
     try {
@@ -27,15 +74,12 @@ const Inventory = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      // --- SIMULATING STOCK FIELD INTEGRATION ---
       const productsWithStock = response.data.map(product => ({
         ...product,
-        // Ensure default values are used if not provided by API
-        stock: product.stock ?? Math.floor(Math.random() * 100),
+        stock: product.stock ?? 0,
         costPrice: product.costPrice ?? product.price * 0.5,
         lowStockThreshold: product.lowStockThreshold ?? 10
       }));
-      // ------------------------------------------
 
       setProducts(productsWithStock);
     } catch (error) {
@@ -44,9 +88,16 @@ const Inventory = () => {
     }
   }, []);
 
+  const initialFetch = useCallback(async () => {
+      await Promise.all([
+          fetchSettings(),
+          fetchInventory()
+      ]);
+  }, [fetchSettings, fetchInventory]);
+
   useEffect(() => {
-    fetchInventory();
-  }, [fetchInventory]);
+    initialFetch();
+  }, [initialFetch]);
 
   // --- Derived Metrics (using useMemo) ---
   const lowStockProducts = useMemo(() => 
@@ -58,7 +109,8 @@ const Inventory = () => {
   , [products]);
   
   const totalInventoryValue = useMemo(() => 
-    products.reduce((sum, p) => sum + ((p.costPrice || p.price) * p.stock), 0)
+    // Calculate total inventory value using costPrice
+    products.reduce((sum, p) => sum + ((p.costPrice || p.price || 0) * (p.stock || 0)), 0)
   , [products]);
 
 
@@ -78,11 +130,10 @@ const Inventory = () => {
         const token = localStorage.getItem('token');
         const newStock = currentProduct.stock + restockAmount;
         
-        // --- API CALL TO UPDATE STOCK ---
         await axios.put(`http://localhost:5000/api/products/${currentProduct._id}/stock`, {
             stock: newStock 
         }, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: getAuthHeaders()
         });
 
         // Optimistic UI update
@@ -140,16 +191,22 @@ const Inventory = () => {
           <p className="text-muted mb-0">Track and manage your product inventory</p>
         </Col>
         <Col xs="auto">
-        <Link to="/products" className='text-decoration-none'>
-         {/* NOTE: Linking to Products page for actual creation */}
-          <Button variant="success" className="d-flex align-items-center" onClick={() => showAlert('Redirecting to Products page to add item.', 'info')}>
-            <Plus size={18} className="me-2" />
-            Add New Product
-          </Button>
-        </Link>
-         
+          {/* <Button variant="outline-secondary" className="d-flex align-items-center me-2" onClick={initialFetch}>
+            <RefreshCw size={18} className="me-2" /> Refresh Data
+          </Button> */}
+          <Link to="/products" className='text-decoration-none'>
+            <Button variant="success" className="d-flex align-items-center">
+              <Plus size={18} className="me-2" />
+              Add New Product
+            </Button>
+          </Link>
         </Col>
       </Row>
+      
+      <Alert variant="info" className="mb-4 py-2 small">
+          Inventory Value tracked in: <strong className='text-uppercase'>{currencyCode} ({currencySymbol})</strong>
+      </Alert>
+
 
       {/* Stats Cards */}
       <Row className="g-4 mb-4">
@@ -207,7 +264,7 @@ const Inventory = () => {
                 <div>
                   <h6 className="text-muted mb-2">Inventory Value (Cost)</h6>
                   <h3 className="fw-bold text-success">
-                    ${totalInventoryValue.toFixed(2).toLocaleString()}
+                    {formatCurrency(totalInventoryValue)}
                   </h3>
                 </div>
                 <div className="bg-success bg-opacity-10 rounded-circle p-3">
@@ -275,7 +332,7 @@ const Inventory = () => {
                     </Badge>
                   </td>
                   <td>{product.category || 'N/A'}</td>
-                  <td className="fw-semibold">${(product.price || 0).toFixed(2)}</td>
+                  <td className="fw-semibold">{formatCurrency(product.price)}</td>
                   <td>
                     <div className="d-flex align-items-center">
                       <div className="flex-grow-1 me-3">

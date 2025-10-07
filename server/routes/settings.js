@@ -36,7 +36,8 @@ router.patch('/:category', async (req, res) => {
     const { category } = req.params;
     const updates = req.body;
 
-    const allowedCategories = ['company', 'preferences', 'payment'];
+    // Added 'company' and 'payment' here to reflect frontend tabs
+    const allowedCategories = ['company', 'preferences', 'payment']; 
 
     if (!allowedCategories.includes(category)) {
         return res.status(400).json({ message: `Invalid settings category: ${category}` });
@@ -44,6 +45,7 @@ router.patch('/:category', async (req, res) => {
 
     try {
         // Construct the update object to target the nested field 
+        // This logic correctly maps {gstIn: '...'} to { 'company.gstIn': '...' }
         const updateObject = {};
         for (const key in updates) {
             updateObject[`${category}.${key}`] = updates[key];
@@ -52,13 +54,11 @@ router.patch('/:category', async (req, res) => {
         const settings = await Settings.findOneAndUpdate(
             { settingsId: 'global_settings' },
             { $set: updateObject, updatedAt: new Date() },
-            // FIX: Added upsert: true to create the document if it doesn't exist
+            // Ensures the document exists if this is the first save
             { new: true, runValidators: true, useFindAndModify: false, upsert: true } 
         );
         
-        // With upsert: true, this check should now be unreachable unless Mongoose failed catastrophically.
         if (!settings) {
-            // Re-sending 500 status since 404 is technically wrong if we intend to create it.
             return res.status(500).json({ message: 'Failed to create or update global settings document.' });
         }
 
@@ -67,6 +67,10 @@ router.patch('/:category', async (req, res) => {
 
     } catch (error) {
         console.error(`Error updating ${category} settings:`, error);
+        // Specifically check for validation errors which might occur with new fields
+        if (error.name === 'ValidationError') {
+             return res.status(400).json({ message: `Validation failed: ${error.message}` });
+        }
         res.status(500).json({ message: `Failed to update ${category} settings.`, error: error.message });
     }
 });

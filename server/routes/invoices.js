@@ -111,6 +111,8 @@ router.post('/', auth, async (req, res) => {
 });
 
 // 3. Create formatted invoice bill (matches POST /api/invoices/formatted-bill)
+// This route now saves the formattedData, which includes companyName and branchName 
+// as per the updated Invoice model.
 router.post('/formatted-bill', auth, async (req, res) => {
   try {
     const { invoiceId, formattedData } = req.body;

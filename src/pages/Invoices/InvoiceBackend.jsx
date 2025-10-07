@@ -1,29 +1,29 @@
 // InvoiceBackend.jsx
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
-// Assuming useAuth is available in your environment, but not needed for data logic here.
-// import { useAuth } from '../context/AuthContext'; 
+
+const SETTINGS_API_BASE_URL = "http://localhost:5000/api/settings";
 
 /**
  * useInvoiceBackend
  * - centralises API calls + state management for invoices feature
- * - returns state + action handlers for the UI layer
  */
 export default function useInvoiceBackend() {
-  // Global States (Data)
   const [invoices, setInvoices] = useState([]);
   const [customers, setCustomers] = useState([]);
-  const [products, setProducts] = useState([]); // Products state holds current stock
+  const [products, setProducts] = useState([]); 
   
-  // Form States (Invoice Creation/Edit)
+  // NEW STATE: Global Settings
+  const [settings, setSettings] = useState({
+      company: {},
+      payment: {}
+  });
+  
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [invoiceItems, setInvoiceItems] = useState([]);
   
   const [taxDetails, setTaxDetails] = useState({ 
-    cgst: 9, 
-    sgst: 9, 
-    igst: 0, 
-    gstType: 'cgst_sgst' 
+    cgst: 9, sgst: 9, igst: 0, gstType: 'cgst_sgst' 
   }); 
 
   const [notes, setNotes] = useState('');
@@ -41,7 +41,17 @@ export default function useInvoiceBackend() {
     setTimeout(() => setAlert({ show: false, message: '', type: '' }), 4000);
   }, []);
   
-  // --- API Handlers ---
+  // --- FETCH SETTINGS ---
+  const fetchSettings = useCallback(async () => {
+    try {
+        const res = await axios.get(SETTINGS_API_BASE_URL, { headers: getAuthHeaders() });
+        setSettings(res.data);
+    } catch (error) {
+        console.error("Failed to load company settings:", error);
+    }
+  }, []); 
+  
+  // --- Core API Handlers (Stock Check integrated) ---
 
   const fetchInvoices = useCallback(async () => {
     try {
@@ -49,7 +59,6 @@ export default function useInvoiceBackend() {
       const invoicesData = res.data.invoices || res.data;
       setInvoices(Array.isArray(invoicesData) ? invoicesData : []);
     } catch (err) {
-      console.error('fetchInvoices error', err);
       showAlert('Error fetching invoices', 'danger');
     }
   }, [showAlert]);
@@ -59,37 +68,30 @@ export default function useInvoiceBackend() {
       const res = await axios.get('http://localhost:5000/api/customers', { headers: getAuthHeaders() });
       setCustomers(res.data);
     } catch (err) {
-      console.error('fetchCustomers error', err);
       showAlert('Error fetching customers', 'danger');
     }
   }, [showAlert]);
 
   const fetchProducts = useCallback(async () => {
     try {
-      // NOTE: This should ideally fetch current inventory levels
       const res = await axios.get('http://localhost:5000/api/products', { headers: getAuthHeaders() });
       setProducts(res.data);
     } catch (err) {
-      console.error('fetchProducts error', err);
       showAlert('Error fetching products', 'danger');
     }
   }, [showAlert]);
 
   const createInvoice = async (invoicePayload) => {
-    
-    // =======================================================
-    // STOCK CHECK BEFORE INVOICING (Existing Logic)
-    // =======================================================
+    // Stock check integration for validation
     const itemsToCheck = invoicePayload.items;
     const errors = [];
     
     itemsToCheck.forEach(item => {
         const product = products.find(p => p._id === item.product);
         const requiredQuantity = Number(item.quantity) || 0;
-        const currentStock = Number(product?.stock) || 0; // Assuming 'stock' field exists on product
+        const currentStock = Number(product?.stock) || 0;
 
         if (!product) {
-            // Should not happen if product is selected, but good safety net
             errors.push(`Product ID ${item.product} not found.`);
         } else if (currentStock === 0) {
             errors.push(`${product.name} is currently out of stock (0 available).`);
@@ -99,22 +101,17 @@ export default function useInvoiceBackend() {
     });
 
     if (errors.length > 0) {
-        // Halt invoice creation and display all stock errors
         showAlert(errors.join(' | '), 'danger');
         throw new Error('Stock check failed');
     }
-    // =======================================================
     
     try {
-      // NOTE: Your backend API must handle stock deduction after this successful check
+      // Backend will save the sequential invoiceNumber provided in payload
       const res = await axios.post('http://localhost:5000/api/invoices', invoicePayload, { headers: getAuthHeaders() });
-      await fetchInvoices();
-      // Refetch products to update local stock display immediately
-      await fetchProducts(); 
+      await Promise.all([fetchInvoices(), fetchProducts()]); // Refetch products for immediate stock update
       showAlert('Invoice created successfully!', 'success');
       return res.data;
     } catch (err) {
-      console.error('createInvoice error', err);
       const message = err.response?.data?.message || 'Error creating invoice';
       showAlert(message, 'danger');
       throw err;
@@ -123,13 +120,11 @@ export default function useInvoiceBackend() {
 
   const updateInvoice = async (invoiceId, invoicePayload) => {
     try {
+      // Backend will use the existing sequential invoiceNumber in payload
       await axios.put(`http://localhost:5000/api/invoices/${invoiceId}`, invoicePayload, { headers: getAuthHeaders() });
-      await fetchInvoices();
-      // Refetch products on update as well, since updating an invoice might affect stock
-      await fetchProducts(); 
+      await Promise.all([fetchInvoices(), fetchProducts()]);
       showAlert('Invoice updated successfully!', 'success');
     } catch (err) {
-      console.error('updateInvoice error', err);
       const message = err.response?.data?.message || 'Error updating invoice';
       showAlert(message, 'danger');
       throw err;
@@ -138,14 +133,10 @@ export default function useInvoiceBackend() {
 
   const deleteInvoice = async (invoiceId) => {
     try {
-      // NOTE: Your backend API must handle stock replenishment upon deletion
       await axios.delete(`http://localhost:5000/api/invoices/${invoiceId}`, { headers: getAuthHeaders() });
-      await fetchInvoices();
-      // Refetch products to update local stock display immediately
-      await fetchProducts(); 
+      await Promise.all([fetchInvoices(), fetchProducts()]);
       showAlert('Invoice deleted successfully!', 'success');
     } catch (err) {
-      console.error('deleteInvoice error', err);
       showAlert('Error deleting invoice', 'danger');
       throw err;
     }
@@ -158,18 +149,32 @@ export default function useInvoiceBackend() {
       showAlert('Customer created successfully', 'success');
       return res.data;
     } catch (err) {
-      console.error('createCustomer error', err);
       showAlert('Error creating customer', 'danger');
       throw err;
     }
   };
 
-  const searchCustomerByPhone = async (phone) => {
+  // UPDATED: Search function to handle both phone (primary) and business name (if provided in payload)
+  const searchCustomerByPhone = async (searchQuery) => {
     try {
-      const res = await axios.get(`http://localhost:5000/api/customers/search?phone=${encodeURIComponent(phone)}`, { headers: getAuthHeaders() });
+      let params = {};
+      
+      // Determine if the query is likely a phone number (mostly digits) or a business name
+      const isPhone = !isNaN(searchQuery.trim()) && searchQuery.trim().length >= 5;
+
+      if (isPhone) {
+          params.phone = searchQuery;
+      } else {
+          params.businessName = searchQuery;
+      }
+      
+      // Assuming the backend handles the OR logic based on these parameters
+      const res = await axios.get(`http://localhost:5000/api/customers/search`, { 
+          params,
+          headers: getAuthHeaders() 
+      });
       return res.data;
     } catch (err) {
-      console.warn('searchCustomerByPhone', err);
       return null;
     }
   };
@@ -186,7 +191,6 @@ export default function useInvoiceBackend() {
       link.remove();
       showAlert('Invoices exported successfully', 'success');
     } catch (err) {
-      console.error('exportInvoices error', err);
       showAlert('Error exporting invoices', 'danger');
     }
   };
@@ -195,12 +199,7 @@ export default function useInvoiceBackend() {
 
   const addItem = () => {
     setInvoiceItems(prev => [...prev, {
-      product: '',
-      description: '',
-      hsnCode: '',
-      quantity: 1,
-      price: 0,
-      taxRate: 18 // Default tax rate
+      product: '', description: '', hsnCode: '', quantity: 1, price: 0, taxRate: 18
     }]);
   };
 
@@ -213,17 +212,14 @@ export default function useInvoiceBackend() {
       const copy = [...prev];
       copy[index] = { ...copy[index], [field]: value };
 
-      // Populate item details when a product is selected
       if (field === 'product' && value) {
         const found = products.find(p => p._id === value);
         if (found) {
           copy[index].price = typeof found.price === 'number' ? found.price : parseFloat(found.price || 0);
           copy[index].description = found.description || found.name || copy[index].description;
           copy[index].hsnCode = found.hsnCode || '';
-          // IMPORTANT: Use product's taxRate only, ignoring the global taxDetails state
           copy[index].taxRate = found.taxRate ?? 18; 
           
-          // Add a warning if stock is low/zero on selection
           const currentStock = Number(found.stock) || 0;
           if (currentStock <= 0) {
               showAlert(`${found.name} is currently out of stock.`, 'danger');
@@ -237,13 +233,10 @@ export default function useInvoiceBackend() {
     });
   };
 
-  // --- Calculations ---
-
   const calculateTotalsForItems = useCallback((items = invoiceItems) => {
     let subtotal = 0;
     let totalTax = 0;
     
-    // Calculate total tax based on each item's price * quantity * individual taxRate
     items.forEach(it => {
       const price = Number(it.price) || 0;
       const quantity = Number(it.quantity) || 0;
@@ -256,33 +249,20 @@ export default function useInvoiceBackend() {
 
     const total = subtotal + totalTax;
     
-    // Derive tax details for summary (assuming CGST/SGST split for display purposes)
     const avgTaxRate = (subtotal > 0) ? (totalTax / subtotal) * 100 : 0;
     const cgstAmount = totalTax / 2;
     const sgstAmount = totalTax / 2;
     const igstAmount = totalTax;
     
-    // Structure the output to match the expected API payload structure
     return { 
-      subtotal, 
-      cgstAmount, 
-      sgstAmount, 
-      igstAmount, 
-      totalTax, 
-      total,
+      subtotal, cgstAmount, sgstAmount, igstAmount, totalTax, total,
       taxDetails: {
-        // Use a 50/50 split for CGST/SGST display rates
-        cgst: avgTaxRate / 2, 
-        sgst: avgTaxRate / 2,
-        igst: avgTaxRate,
-        // Assume CGST+SGST type if there is any tax, otherwise no tax.
+        cgst: avgTaxRate / 2, sgst: avgTaxRate / 2, igst: avgTaxRate,
         gstType: totalTax > 0 ? 'cgst_sgst' : 'none' 
       }
     };
   }, [invoiceItems]);
   
-  // --- Form Reset ---
-
   const resetForm = () => {
     setSelectedCustomer(null);
     setInvoiceItems([]);
@@ -292,9 +272,6 @@ export default function useInvoiceBackend() {
     setPaymentType('cash');
   };
   
-  // =======================================================
-  // NEW HELPER: Get stock for a product ID
-  // =======================================================
   const getProductStock = useCallback((productId) => {
       const product = products.find(p => p._id === productId);
       return Number(product?.stock) || 0;
@@ -304,50 +281,32 @@ export default function useInvoiceBackend() {
   // --- Initial Load ---
 
   useEffect(() => {
+    fetchSettings();
     fetchInvoices();
     fetchCustomers();
-    fetchProducts(); // Load products to get stock data
-  }, [fetchInvoices, fetchCustomers, fetchProducts]);
+    fetchProducts(); 
+  }, [fetchSettings, fetchInvoices, fetchCustomers, fetchProducts]);
 
   return {
     // Data
-    invoices,
-    customers,
-    products,
-
+    invoices, customers, products, settings, 
+    
     // Form State
-    selectedCustomer,
-    setSelectedCustomer,
-    invoiceItems,
-    setInvoiceItems,
-    taxDetails, 
-    setTaxDetails, 
-    notes,
-    setNotes,
-    dueDate,
-    setDueDate,
-    paymentType,
-    setPaymentType,
+    selectedCustomer, setSelectedCustomer,
+    invoiceItems, setInvoiceItems,
+    taxDetails, setTaxDetails, 
+    notes, setNotes,
+    dueDate, setDueDate,
+    paymentType, setPaymentType,
 
     // Actions
-    fetchInvoices,
-    createInvoice,
-    updateInvoice,
-    deleteInvoice,
-    exportInvoices,
-    createCustomer,
-    searchCustomerByPhone,
-    addItem,
-    removeItem,
-    updateItem,
+    fetchInvoices, createInvoice, updateInvoice, deleteInvoice, exportInvoices,
+    createCustomer, searchCustomerByPhone, addItem, removeItem, updateItem,
 
     // Totals & Helpers
-    calculateTotalsForItems,
-    resetForm,
-    getProductStock, // EXPORTED HELPER
+    calculateTotalsForItems, resetForm, getProductStock,
     
     // Alerts
-    alert,
-    showAlert
+    alert, showAlert
   };
 }

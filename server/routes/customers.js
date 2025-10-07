@@ -1,3 +1,4 @@
+// routes/customers.js
 import express from 'express';
 import Customer from '../models/Customer.js';
 import { auth } from '../middleware/auth.js';
@@ -9,53 +10,45 @@ const router = express.Router();
 // Helper function to normalize phone number
 const normalizePhone = (phone) => phone.replace(/[^\d]/g, '');
 
-// Helper function to check duplicate customer
-const checkDuplicateCustomer = async (phone, email, excludeId = null) => {
+// Helper function to check duplicate customer (FIXED: BusinessName removed from uniqueness check)
+const checkDuplicateCustomer = async (phone, email, businessName, excludeId = null) => {
   const normalizedPhone = normalizePhone(phone);
-  const filter = { 
+  
+  // 1. Check for duplicate Phone or Email
+  let filter = { 
     $or: [
-      { phone: { $regex: normalizedPhone, $options: 'i' } },
-      { phone: { $regex: phone, $options: 'i' } }
+      { phone: normalizedPhone }
     ]
   };
+
+  if (email && email.trim()) {
+      filter.$or.push({ email: email.toLowerCase().trim() });
+  }
+
+  // NOTE: Business Name check is removed from uniqueness logic to allow multiple contacts from the same organization.
 
   if (excludeId) {
     filter._id = { $ne: excludeId };
   }
 
-  const existingPhoneCustomer = await Customer.findOne(filter);
+  // We only check for phone and email duplicates now
+  const existingCustomer = await Customer.findOne(filter);
   
-  if (existingPhoneCustomer) {
+  if (existingCustomer) {
+    let type = existingCustomer.phone === normalizedPhone ? 'phone' : existingCustomer.email === email?.toLowerCase().trim() ? 'email' : 'contact detail';
+    
     return { 
       exists: true, 
-      type: 'phone', 
-      customer: existingPhoneCustomer,
-      message: `Customer with phone number ${phone} already exists (${existingPhoneCustomer.name})`
+      type: type, 
+      customer: existingCustomer,
+      message: `Customer with duplicate ${type} already exists: ${existingCustomer.name} (${existingCustomer.businessName || 'Individual'})`
     };
-  }
-
-  if (email && email.trim()) {
-    const emailFilter = { email: email.toLowerCase().trim() };
-    if (excludeId) {
-      emailFilter._id = { $ne: excludeId };
-    }
-
-    const existingEmailCustomer = await Customer.findOne(emailFilter);
-    
-    if (existingEmailCustomer) {
-      return { 
-        exists: true, 
-        type: 'email', 
-        customer: existingEmailCustomer,
-        message: `Customer with email ${email} already exists (${existingEmailCustomer.name})`
-      };
-    }
   }
 
   return { exists: false };
 };
 
-// Get all customers with search and filtering
+// Get all customers with search and filtering (Updated to search businessName)
 router.get('/', auth, async (req, res) => {
   try {
     const { search } = req.query;
@@ -65,6 +58,7 @@ router.get('/', auth, async (req, res) => {
       filter = {
         $or: [
           { name: { $regex: search, $options: 'i' } },
+          { businessName: { $regex: search, $options: 'i' } }, // <-- SEARCH FIELD REMAINS
           { phone: { $regex: search, $options: 'i' } },
           { email: { $regex: search, $options: 'i' } },
           { gstNumber: { $regex: search, $options: 'i' } }
@@ -74,7 +68,7 @@ router.get('/', auth, async (req, res) => {
 
     const customers = await Customer.find(filter).sort({ createdAt: -1 });
     
-    // Add invoice count as 0 for all customers (temporary)
+    // NOTE: Invoice count remains temporary unless you implement aggregation
     const customersWithCounts = customers.map(customer => ({
       ...customer.toObject(),
       invoiceCount: 0
@@ -87,16 +81,28 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// Search customer by phone
+// Search customer by phone OR business name (Updated)
 router.get('/search', auth, async (req, res) => {
   try {
-    const { phone } = req.query;
+    const { phone, businessName } = req.query;
     
-    if (!phone) {
-      return res.status(400).json({ message: 'Phone number is required' });
+    let filter = {};
+    if (phone) {
+      filter.phone = phone;
+    }
+    if (businessName) {
+      filter.businessName = { $regex: businessName, $options: 'i' };
     }
 
-    const customer = await Customer.findOne({ phone });
+    if (!phone && !businessName) {
+      return res.status(400).json({ message: 'Phone number or Business Name is required for search.' });
+    }
+
+    // Use $or to find by either phone or businessName
+    const customer = await Customer.findOne({ $or: [
+      ...(phone ? [{ phone: normalizePhone(phone) }] : []),
+      ...(businessName ? [{ businessName: { $regex: businessName, $options: 'i' } }] : [])
+    ]});
     
     if (!customer) {
       return res.status(404).json({ message: 'Customer not found' });
@@ -109,17 +115,17 @@ router.get('/search', auth, async (req, res) => {
   }
 });
 
-// Create customer
+// Create customer (Updated for duplicate check)
 router.post('/', auth, async (req, res) => {
   try {
-    const { phone, email } = req.body;
+    const { phone, email, businessName } = req.body;
     
     if (!phone?.trim()) {
       return res.status(400).json({ message: 'Phone number is required' });
     }
 
     // Check for duplicates
-    const duplicateCheck = await checkDuplicateCustomer(phone, email);
+    const duplicateCheck = await checkDuplicateCustomer(phone, email, businessName);
     if (duplicateCheck.exists) {
       return res.status(400).json({ message: duplicateCheck.message });
     }
@@ -144,10 +150,10 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-// Update customer
+// Update customer (Updated for duplicate check)
 router.put('/:id', auth, async (req, res) => {
   try {
-    const { phone, email } = req.body;
+    const { phone, email, businessName } = req.body;
     const customerId = req.params.id;
 
     if (!phone?.trim()) {
@@ -155,7 +161,7 @@ router.put('/:id', auth, async (req, res) => {
     }
 
     // Check for duplicates excluding current customer
-    const duplicateCheck = await checkDuplicateCustomer(phone, email, customerId);
+    const duplicateCheck = await checkDuplicateCustomer(phone, email, businessName, customerId);
     if (duplicateCheck.exists) {
       return res.status(400).json({ message: duplicateCheck.message });
     }
@@ -190,7 +196,7 @@ router.put('/:id', auth, async (req, res) => {
   }
 });
 
-// Delete customer
+// Delete customer (Existing)
 router.delete('/:id', auth, async (req, res) => {
   try {
     const customer = await Customer.findByIdAndDelete(req.params.id);
@@ -209,7 +215,7 @@ router.delete('/:id', auth, async (req, res) => {
   }
 });
 
-// Get single customer
+// Get single customer (Existing)
 router.get('/:id', auth, async (req, res) => {
   try {
     const customer = await Customer.findById(req.params.id);
@@ -225,14 +231,15 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-// Export customers to CSV
+// Export customers to CSV (Updated to include businessName)
 router.get('/export/csv', auth, async (req, res) => {
   try {
     const customers = await Customer.find().sort({ name: 1 });
 
     const csvStringifier = createObjectCsvStringifier({
       header: [
-        { id: 'name', title: 'Name' },
+        { id: 'name', title: 'Contact Name' },
+        { id: 'businessName', title: 'Business Name' }, // <-- NEW HEADER
         { id: 'email', title: 'Email' },
         { id: 'phone', title: 'Phone' },
         { id: 'gstNumber', title: 'GST Number' },
@@ -243,6 +250,7 @@ router.get('/export/csv', auth, async (req, res) => {
 
     const records = customers.map(customer => ({
       name: customer.name,
+      businessName: customer.businessName || 'N/A', // <-- NEW FIELD
       email: customer.email || 'N/A',
       phone: customer.phone,
       gstNumber: customer.gstNumber || 'N/A',
